@@ -15,35 +15,9 @@ Text-to-speech plugin for [OpenCode](https://opencode.ai) — hear AI responses 
 
 ---
 
-## Quick Start
+## Install
 
-### 1. Install a TTS engine
-
-You need at least one. Both are optional — the plugin auto-detects what's available.
-
-**Kokoro** (recommended — 86MB download, 54 voices, CPU-optimized):
-
-```bash
-uv tool install kokoro-cli
-sudo apt install espeak-ng    # required on Linux
-kokoro speak "hello" --play   # downloads model on first run
-```
-
-**Supertonic 3** (99M params, 10 voices, 31 languages):
-
-```bash
-uv tool install speak-cli
-speak "hello"                 # downloads model (~400MB) on first run
-speak --stop                  # stop the background daemon after first run
-```
-
-### 2. Install the plugin
-
-Pick one method:
-
-**From npm (recommended):**
-
-Add to `~/.config/opencode/opencode.jsonc`:
+Add `opencode-speak` to your OpenCode config (`~/.config/opencode/opencode.jsonc`):
 
 ```jsonc
 {
@@ -58,18 +32,24 @@ Add to `~/.config/opencode/opencode.jsonc`:
 }
 ```
 
-**From source:**
+Then install at least one TTS engine:
 
 ```bash
-git clone https://github.com/ahmed0magdy/opencode-speak.git
-cp opencode-speak/src/index.ts ~/.config/opencode/plugins/opencode-speak.ts
+uv tool install kokoro-cli          # Kokoro — 86MB, 54 voices (recommended)
+sudo apt install espeak-ng          # required dependency on Linux
 ```
 
-Then add the `/tts` command block to your `opencode.jsonc` (same as above).
+```bash
+uv tool install speak-cli           # Supertonic 3 — 400MB, 10 voices, 31 languages
+```
 
-### 3. Use it
+Restart OpenCode. Type `/tts on` and start chatting — you'll hear the AI speak.
 
-Restart OpenCode, type `/tts on`, and start chatting. You'll hear the AI's response spoken aloud after each turn.
+> **Alternative:** install from source instead of npm:
+> ```bash
+> git clone https://github.com/ahmed0magdy/opencode-speak.git
+> cp opencode-speak/src/index.ts ~/.config/opencode/plugins/opencode-speak.ts
+> ```
 
 ---
 
