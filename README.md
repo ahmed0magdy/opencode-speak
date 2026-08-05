@@ -3,32 +3,39 @@
 [![npm version](https://img.shields.io/npm/v/opencode-speak)](https://www.npmjs.com/package/opencode-speak)
 [![license](https://img.shields.io/npm/l/opencode-speak)](LICENSE)
 
-Text-to-speech plugin for [OpenCode](https://opencode.ai) — hear AI responses spoken aloud using local TTS engines. No cloud, no API keys, everything runs on your machine.
+Text-to-speech plugin for [OpenCode](https://opencode.ai) — hear AI responses spoken aloud using local TTS engines. No cloud, no API keys, no subscriptions, everything runs on your machine.
 
 ## Features
 
-- **Two TTS engines** — [Kokoro](https://github.com/yoav0gal/kokoro-cli) (82M params, 54 voices) and [Supertonic 3](https://github.com/supertone-inc/supertonic) (99M params, 10 voices)
-- **On-demand** — TTS is off by default, toggle on/off with a single command
-- **No background processes** — models load per-request, zero idle RAM usage
+- **Two local TTS engines** — [Kokoro](https://github.com/yoav0gal/kokoro-cli) (82M params, 54 voices) and [Supertonic 3](https://github.com/supertone-inc/supertonic) (99M params, 10 voices)
+- **100% offline** — no cloud APIs, no tokens, fully private
+- **On-demand** — TTS is off by default, toggle with `/tts on` and `/tts off`
+- **No background processes** — models load per-request, zero idle RAM
 - **Switch engines live** — swap between Kokoro and Supertonic without restarting
-- **54+ voices** — multilingual support across English, Japanese, Chinese, Hindi, French, Italian, and more
+- **54+ voices** — multilingual support across English, Japanese, Chinese, Hindi, French, Italian, Portuguese, and more
 
 ---
 
 ## Install
 
-### Step 1: Install the plugin
+### 1. Install the plugin
 
 ```bash
 opencode plugin opencode-speak --global
 ```
 
-This installs the npm package and adds it to your global OpenCode config automatically.
+Or with npm:
 
-Then add the `/tts` command to your config (`~/.config/opencode/opencode.jsonc`):
+```bash
+npm install opencode-speak
+```
+
+Then add to your OpenCode config (`~/.config/opencode/opencode.jsonc`):
 
 ```jsonc
 {
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["opencode-speak"],
   "command": {
     "tts": {
       "template": "$ARGUMENTS",
@@ -38,7 +45,9 @@ Then add the `/tts` command to your config (`~/.config/opencode/opencode.jsonc`)
 }
 ```
 
-### Step 2: Install a TTS engine
+> The `opencode plugin` command adds the plugin entry automatically. You only need to add the `command` block manually for the `/tts` slash command.
+
+### 2. Install a TTS engine
 
 You need at least one. Both are optional — the plugin auto-detects what's available.
 
@@ -56,28 +65,19 @@ speak "hello"                       # downloads model on first run
 speak --stop                        # stop background daemon after first run
 ```
 
-### Step 3: Start
+### 3. Start
 
-Restart OpenCode, then type `/tts on` and start chatting — you'll hear the AI speak.
+Restart OpenCode, type `/tts on`, and start chatting.
 
 <details>
-<summary>Alternative install methods</summary>
-
-**Manual npm config** — add to `~/.config/opencode/opencode.jsonc`:
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-speak"]
-}
-```
-
-**From source** — copy the plugin file directly:
+<summary>Alternative: install from source</summary>
 
 ```bash
 git clone https://github.com/ahmed0magdy/opencode-speak.git
 cp opencode-speak/src/index.ts ~/.config/opencode/plugins/opencode-speak.ts
 ```
+
+Then add the `command` block to your `opencode.jsonc` (same as above).
 
 </details>
 
@@ -96,6 +96,8 @@ cp opencode-speak/src/index.ts ~/.config/opencode/plugins/opencode-speak.ts
 | `/tts test` | Speak a test phrase |
 | `/tts status` | Show current settings |
 | `/tts help` | Show all commands |
+
+---
 
 ## Configuration (optional)
 
@@ -124,7 +126,7 @@ Pass options when using as an npm plugin:
 
 ---
 
-## Available Voices
+## Voices
 
 ### Kokoro — Female
 
@@ -159,6 +161,23 @@ No background processes run while TTS is off. Models load on-demand and release 
 
 ---
 
+## Comparison
+
+| | opencode-speak | [narrate](https://github.com/felores/narrate) | [vox](https://github.com/punt-labs/vox) | [voice-bridge](https://github.com/Tomorrow-You/voice-bridge) | [aftertone](https://github.com/omarelkhal/aftertone) |
+|---|---|---|---|---|---|
+| **Cloud-free** | Yes | Optional | Optional | Optional | Yes |
+| **API keys needed** | No | Depends on provider | Depends on provider | Optional (edge-tts free) | No |
+| **OpenCode** | Yes | Yes | No | No | Soon |
+| **Claude Code** | Planned | Yes | Yes | Yes | Yes |
+| **Cursor** | No | Yes | No | Yes (MCP) | Yes |
+| **Codex** | No | Yes | No | No | Yes |
+| **Local engines** | Kokoro, Supertonic 3 | Voicebox, Kokoro | System TTS | Kokoro, espeak-ng | Supertonic ONNX |
+| **Cloud engines** | None | ElevenLabs, OpenAI, Gemini | ElevenLabs, Polly, OpenAI | ElevenLabs, edge-tts | None |
+| **Background daemon** | No | Yes | Yes | No | Yes |
+| **Install** | One command | Script | Script | Plugin marketplace | Script |
+
+---
+
 ## WSL2 Audio Setup
 
 If you're on WSL2, make sure WSLg is enabled:
@@ -176,11 +195,12 @@ If you're on WSL2, make sure WSLg is enabled:
 ## Uninstall
 
 ```bash
-# npm plugin: remove "opencode-speak" from plugin array in opencode.jsonc
-# Local file:
-rm ~/.config/opencode/plugins/opencode-speak.ts
+# Remove plugin from opencode config:
+# Delete "opencode-speak" from the "plugin" array in opencode.jsonc
+# Delete the "tts" command entry from opencode.jsonc
 
-# Remove /tts command from opencode.jsonc
+# Or remove local file:
+rm ~/.config/opencode/plugins/opencode-speak.ts
 
 # Remove TTS engines (optional):
 uv tool uninstall kokoro-cli
@@ -188,6 +208,8 @@ uv tool uninstall speak-cli
 rm -rf ~/.local/share/kokoro        # Kokoro models
 rm -rf ~/.cache/supertonic3         # Supertonic 3 models
 ```
+
+---
 
 ## Contributing
 
