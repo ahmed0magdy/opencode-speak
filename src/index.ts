@@ -262,11 +262,18 @@ function formatConfig(state: TTSState, availableEngines: Engine[]): string {
     `═ TTS: ${state.enabled ? "ON" : "OFF"} ═ Engine: ${state.engine} [${availableEngines.join(", ")}] ═`,
     "",
     "Kokoro:",
-    `  Voice: ${state.voice.kokoro}  Speed: ${state.speed.kokoro}  Lang: ${state.lang.kokoro}  Model: ${state.kokoroModel}`,
-    "Supertonic 3:",
-    `  Voice: ${state.voice.speak}  Speed: ${state.speed.speak}  Lang: ${state.lang.speak}  Steps: ${state.speakSteps}`,
+    `  Voice: ${state.voice.kokoro}`,
+    `  Speed: ${state.speed.kokoro}  [0.5 - 4.0]`,
+    `  Lang:  ${state.lang.kokoro}  [en-us, en-gb, ja, zh, hi, fr, it, pt, es, ko]`,
+    `  Model: ${state.kokoroModel}  [int8, fp16, full]`,
     "",
-    "on|off kokoro|speak voice|speed|lang|model|steps X voices test help",
+    "Supertonic 3:",
+    `  Voice: ${state.voice.speak}`,
+    `  Speed: ${state.speed.speak}  [0.7 - 2.0]`,
+    `  Lang:  ${state.lang.speak}  [auto, na, ar, de, es, fr, hi, it, ja, ko, pt, ru, zh]`,
+    `  Steps: ${state.speakSteps}  [5-12, higher=better]`,
+    "",
+    "/tts on|off|kokoro|speak|voice|speed|lang|model|steps|voices|test",
   ]
   return lines.join("\n")
 }
