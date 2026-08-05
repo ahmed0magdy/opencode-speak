@@ -1,0 +1,39 @@
+{
+  "name": "opencode-speak",
+  "version": "1.0.0",
+  "description": "Text-to-speech plugin for OpenCode — hear LLM responses spoken aloud using Kokoro or Supertonic 3",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "tts",
+    "text-to-speech",
+    "kokoro",
+    "supertonic",
+    "voice",
+    "speech"
+  ],
+  "author": "ahmed0magdy",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ahmed0magdy/opencode-speak.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ahmed0magdy/opencode-speak/issues"
+  },
+  "homepage": "https://github.com/ahmed0magdy/opencode-speak#readme",
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.18.0"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "latest"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "files": [
+    "src/index.ts"
+  ]
+}
