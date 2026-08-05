@@ -36,11 +36,17 @@ config_get() {
     cat "$file"
   else
     case "$key" in
-      enabled)      echo "false" ;;
-      engine)       echo "kokoro" ;;
-      voice_kokoro) echo "af_heart" ;;
-      voice_speak)  echo "sara" ;;
-      *)            echo "" ;;
+      enabled)       echo "false" ;;
+      engine)        echo "kokoro" ;;
+      voice_kokoro)  echo "af_heart" ;;
+      voice_speak)   echo "sara" ;;
+      speed_kokoro)  echo "1.0" ;;
+      speed_speak)   echo "1.0" ;;
+      lang_kokoro)   echo "en-us" ;;
+      lang_speak)    echo "auto" ;;
+      kokoro_model)  echo "int8" ;;
+      speak_steps)   echo "8" ;;
+      *)             echo "" ;;
     esac
   fi
 }
@@ -53,10 +59,16 @@ config_set() {
 
 config_init() {
   ensure_dir
-  [[ -f "${CONFIG_DIR}/enabled" ]]      || echo -n "false"    > "${CONFIG_DIR}/enabled"
-  [[ -f "${CONFIG_DIR}/engine" ]]       || echo -n "kokoro"   > "${CONFIG_DIR}/engine"
-  [[ -f "${CONFIG_DIR}/voice_kokoro" ]] || echo -n "af_heart" > "${CONFIG_DIR}/voice_kokoro"
-  [[ -f "${CONFIG_DIR}/voice_speak" ]]  || echo -n "sara"     > "${CONFIG_DIR}/voice_speak"
+  [[ -f "${CONFIG_DIR}/enabled" ]]       || echo -n "false"    > "${CONFIG_DIR}/enabled"
+  [[ -f "${CONFIG_DIR}/engine" ]]        || echo -n "kokoro"   > "${CONFIG_DIR}/engine"
+  [[ -f "${CONFIG_DIR}/voice_kokoro" ]]  || echo -n "af_heart" > "${CONFIG_DIR}/voice_kokoro"
+  [[ -f "${CONFIG_DIR}/voice_speak" ]]   || echo -n "sara"     > "${CONFIG_DIR}/voice_speak"
+  [[ -f "${CONFIG_DIR}/speed_kokoro" ]]  || echo -n "1.0"      > "${CONFIG_DIR}/speed_kokoro"
+  [[ -f "${CONFIG_DIR}/speed_speak" ]]   || echo -n "1.0"      > "${CONFIG_DIR}/speed_speak"
+  [[ -f "${CONFIG_DIR}/lang_kokoro" ]]   || echo -n "en-us"    > "${CONFIG_DIR}/lang_kokoro"
+  [[ -f "${CONFIG_DIR}/lang_speak" ]]    || echo -n "auto"     > "${CONFIG_DIR}/lang_speak"
+  [[ -f "${CONFIG_DIR}/kokoro_model" ]]  || echo -n "int8"     > "${CONFIG_DIR}/kokoro_model"
+  [[ -f "${CONFIG_DIR}/speak_steps" ]]   || echo -n "8"        > "${CONFIG_DIR}/speak_steps"
   echo "Config initialized at ${CONFIG_DIR}"
 }
 
@@ -65,19 +77,27 @@ config_status() {
   echo ""
   echo "  Status:       $(config_get enabled)"
   echo "  Engine:       $(config_get engine)"
-  echo "  Kokoro voice: $(config_get voice_kokoro)"
-  echo "  Speak voice:  $(config_get voice_speak)"
+  echo ""
+  echo "── Kokoro Settings ──"
+  echo "  Voice:  $(config_get voice_kokoro)  [options: /tts voices]"
+  echo "  Speed:  $(config_get speed_kokoro)  [0.5 - 4.0]"
+  echo "  Lang:   $(config_get lang_kokoro)  [en-us, en-gb, ja, zh, hi, fr, it, pt, es, ko]"
+  echo "  Model:  $(config_get kokoro_model)  [int8, fp16, full]"
+  echo ""
+  echo "── Supertonic 3 Settings ──"
+  echo "  Voice:  $(config_get voice_speak)  [options: /tts voices]"
+  echo "  Speed:  $(config_get speed_speak)  [0.7 - 2.0]"
+  echo "  Lang:   $(config_get lang_speak)  [auto, na, ar, de, es, fr, hi, it, ja, ko, pt, ru, zh]"
+  echo "  Steps:  $(config_get speak_steps)  [5-12, higher=better quality]"
   echo ""
   echo "── Roleplay Voices (warm/expressive) ──"
   echo "  Kokoro: af_bella, af_heart, af_sarah, af_kore, af_sky"
   echo "  Speak:  emma, lily, sara"
   echo ""
-  echo "── Quick Commands ──"
-  echo "  tts-config.sh set enabled true|false"
-  echo "  tts-config.sh set engine kokoro|speak"
-  echo "  tts-config.sh set voice_kokoro af_bella"
-  echo "  tts-config.sh set voice_speak emma"
-  echo "  tts-config.sh roleplay"
+  echo "── Set via: tts-config.sh set <key> <value> ──"
+  echo "  Keys: enabled, engine, voice_kokoro, voice_speak,"
+  echo "        speed_kokoro, speed_speak, lang_kokoro, lang_speak,"
+  echo "        kokoro_model, speak_steps"
   echo "═════════════════════════════════"
 }
 

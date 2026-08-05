@@ -10,6 +10,10 @@ interface TTSState {
   enabled: boolean
   engine: Engine
   voice: Record<Engine, string>
+  speed: Record<Engine, string>
+  lang: Record<Engine, string>
+  kokoroModel: string
+  speakSteps: string
   speaking: boolean
   lastSpokenMessageID: string
   activeProc: ReturnType<typeof spawn> | null
@@ -85,6 +89,12 @@ function syncStateFromConfig(state: TTSState): void {
   if (engine === "kokoro" || engine === "speak") state.engine = engine
   state.voice.kokoro = readConfig("voice_kokoro", state.voice.kokoro)
   state.voice.speak = readConfig("voice_speak", state.voice.speak)
+  state.speed.kokoro = readConfig("speed_kokoro", state.speed.kokoro)
+  state.speed.speak = readConfig("speed_speak", state.speed.speak)
+  state.lang.kokoro = readConfig("lang_kokoro", state.lang.kokoro)
+  state.lang.speak = readConfig("lang_speak", state.lang.speak)
+  state.kokoroModel = readConfig("kokoro_model", state.kokoroModel)
+  state.speakSteps = readConfig("speak_steps", state.speakSteps)
 }
 
 function syncStateToConfig(state: TTSState): void {
@@ -92,6 +102,12 @@ function syncStateToConfig(state: TTSState): void {
   writeConfig("engine", state.engine)
   writeConfig("voice_kokoro", state.voice.kokoro)
   writeConfig("voice_speak", state.voice.speak)
+  writeConfig("speed_kokoro", state.speed.kokoro)
+  writeConfig("speed_speak", state.speed.speak)
+  writeConfig("lang_kokoro", state.lang.kokoro)
+  writeConfig("lang_speak", state.lang.speak)
+  writeConfig("kokoro_model", state.kokoroModel)
+  writeConfig("speak_steps", state.speakSteps)
 }
 
 function resolveExecutable(name: string): string | null {
@@ -213,8 +229,8 @@ async function synthesize(
 
       const cmd =
         engine === "kokoro"
-          ? `cat "${tmp}" | "${bin}" speak --voice ${voice} --play --service off`
-          : `cat "${tmp}" | "${bin}" -v ${voice} --no-daemon`
+          ? `cat "${tmp}" | "${bin}" speak --voice ${voice} --speed ${state.speed.kokoro} --lang ${state.lang.kokoro} --model ${state.kokoroModel} --play --service off`
+          : `cat "${tmp}" | "${bin}" -v ${voice} -s ${state.speed.speak} -l ${state.lang.speak} --steps ${state.speakSteps} --no-daemon`
 
       const proc = spawn({
         cmd: ["bash", "-c", cmd],
@@ -257,24 +273,35 @@ function formatConfig(state: TTSState, availableEngines: Engine[]): string {
     "═══ opencode-speak config ═══",
     "",
     `  Status:       ${state.enabled ? "ON" : "OFF"}`,
-    `  Engine:       ${state.engine}${availableEngines.length > 1 ? ` (available: ${availableEngines.join(", ")})` : ""}`,
-    `  Voice:        ${state.voice[state.engine]}`,
-    `  Kokoro voice: ${state.voice.kokoro}`,
-    `  Speak voice:  ${state.voice.speak}`,
+    `  Engine:       ${state.engine}  [options: ${availableEngines.join(", ")}]`,
     "",
-    "── Roleplay Voices (warm/expressive) ──",
+    "── Kokoro Settings ──",
+    `  Voice:  ${state.voice.kokoro}`,
+    `  Speed:  ${state.speed.kokoro}  [0.5 - 4.0]`,
+    `  Lang:   ${state.lang.kokoro}  [en-us, en-gb, ja, zh, hi, fr, it, pt, es, ko]`,
+    `  Model:  ${state.kokoroModel}  [int8, fp16, full]`,
+    "",
+    "── Supertonic 3 Settings ──",
+    `  Voice:  ${state.voice.speak}`,
+    `  Speed:  ${state.speed.speak}  [0.7 - 2.0]`,
+    `  Lang:   ${state.lang.speak}  [auto, na, ar, de, es, fr, hi, it, ja, ko, pt, ru, zh]`,
+    `  Steps:  ${state.speakSteps}  [5-12, higher=better quality]`,
+    "",
+    "── Roleplay Voices ──",
     `  Kokoro: ${KOKORO_ROLEPLAY_VOICES.join(", ")}`,
     `  Speak:  ${SPEAK_ROLEPLAY_VOICES.join(", ")}`,
     "",
     "── Commands ──",
-    "  /tts on         enable",
-    "  /tts off        disable",
-    "  /tts kokoro     switch engine",
-    "  /tts speak      switch engine",
-    "  /tts voice X    change voice",
-    "  /tts voices     list all voices",
-    "  /tts roleplay   set best roleplay voice",
-    "  /tts test       test current voice",
+    "  /tts on|off        enable/disable",
+    "  /tts kokoro|speak  switch engine",
+    "  /tts roleplay      set warm female voice",
+    "  /tts voice X       set voice",
+    "  /tts speed X       set speed",
+    "  /tts lang X        set language",
+    "  /tts model X       set kokoro model",
+    "  /tts steps X       set speak quality steps",
+    "  /tts voices        list all voices",
+    "  /tts test          test current config",
     "═════════════════════════════════",
   ]
   return lines.join("\n")
@@ -315,6 +342,10 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
       kokoro: opts.defaultVoice?.kokoro ?? "af_heart",
       speak: opts.defaultVoice?.speak ?? "sara",
     },
+    speed: { kokoro: "1.0", speak: "1.0" },
+    lang: { kokoro: "en-us", speak: "auto" },
+    kokoroModel: "int8",
+    speakSteps: "8",
     speaking: false,
     lastSpokenMessageID: "",
     activeProc: null,
@@ -415,6 +446,60 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
       return
     }
 
+    if (args.startsWith("speed ")) {
+      const val = parseFloat(args.slice(6).trim())
+      const min = state.engine === "kokoro" ? 0.5 : 0.7
+      const max = state.engine === "kokoro" ? 4.0 : 2.0
+      if (isNaN(val) || val < min || val > max) {
+        await toast(`Speed must be ${min}-${max} for ${state.engine}`, "warning")
+        return
+      }
+      state.speed[state.engine] = val.toString()
+      syncStateToConfig(state)
+      await toast(`Speed set: ${val} (${state.engine})`, "success")
+      return
+    }
+
+    if (args.startsWith("lang ")) {
+      const val = args.slice(5).trim()
+      const validKokoro = ["en-us", "en-gb", "ja", "zh", "hi", "fr", "it", "pt", "es", "ko"]
+      const validSpeak = ["auto", "na", "ar", "de", "es", "fr", "hi", "it", "ja", "ko", "pt", "ru", "zh"]
+      const valid = state.engine === "kokoro" ? validKokoro : validSpeak
+      if (!valid.includes(val)) {
+        await toast(`Invalid lang "${val}". Options: ${valid.join(", ")}`, "warning")
+        return
+      }
+      state.lang[state.engine] = val
+      syncStateToConfig(state)
+      await toast(`Language set: ${val} (${state.engine})`, "success")
+      return
+    }
+
+    if (args.startsWith("model ")) {
+      const val = args.slice(6).trim()
+      const valid = ["int8", "fp16", "full"]
+      if (!valid.includes(val)) {
+        await toast(`Invalid model. Options: ${valid.join(", ")}`, "warning")
+        return
+      }
+      state.kokoroModel = val
+      syncStateToConfig(state)
+      await toast(`Kokoro model set: ${val}`, "success")
+      return
+    }
+
+    if (args.startsWith("steps ")) {
+      const val = parseInt(args.slice(6).trim(), 10)
+      if (isNaN(val) || val < 5 || val > 12) {
+        await toast("Steps must be 5-12 (higher=better quality, slower)", "warning")
+        return
+      }
+      state.speakSteps = val.toString()
+      syncStateToConfig(state)
+      await toast(`Speak steps set: ${val}`, "success")
+      return
+    }
+
     if (args === "test") {
       if (!binaries[state.engine]) {
         await toast(`Engine "${state.engine}" not installed`, "error")
@@ -454,9 +539,12 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
           "/tts speak       — use Supertonic 3 engine",
           "/tts roleplay    — set best warm female voice",
           "/tts voice X     — change voice",
+          "/tts speed X     — set speed (kokoro: 0.5-4, speak: 0.7-2)",
+          "/tts lang X      — set language",
+          "/tts model X     — kokoro model (int8/fp16/full)",
+          "/tts steps X     — speak quality (5-12)",
           "/tts voices      — list voices (★ = roleplay)",
-          "/tts test        — speak a test phrase",
-          "/tts status      — show config panel",
+          "/tts test        — test current config",
         ].join("\n"),
         "info",
         20000,

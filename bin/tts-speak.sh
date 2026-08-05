@@ -19,6 +19,12 @@ ENABLED=$(read_config "enabled" "false")
 ENGINE=$(read_config "engine" "kokoro")
 VOICE_KOKORO=$(read_config "voice_kokoro" "af_heart")
 VOICE_SPEAK=$(read_config "voice_speak" "sara")
+SPEED_KOKORO=$(read_config "speed_kokoro" "1.0")
+SPEED_SPEAK=$(read_config "speed_speak" "1.0")
+LANG_KOKORO=$(read_config "lang_kokoro" "en-us")
+LANG_SPEAK=$(read_config "lang_speak" "auto")
+KOKORO_MODEL=$(read_config "kokoro_model" "int8")
+SPEAK_STEPS=$(read_config "speak_steps" "8")
 
 if [[ "$ENABLED" != "true" ]]; then
   exit 0
@@ -110,13 +116,13 @@ SPEAK_BIN=$(command -v speak 2>/dev/null || echo "${HOME}/.local/bin/speak")
 
 if [[ "$ENGINE" == "kokoro" ]]; then
   if [[ -x "$KOKORO_BIN" ]]; then
-    timeout "$CHUNK_TIMEOUT" bash -c "cat \"$TMP\" | \"$KOKORO_BIN\" speak --voice \"$VOICE_KOKORO\" --play --service off" >/dev/null 2>&1 &
+    timeout "$CHUNK_TIMEOUT" bash -c "cat \"$TMP\" | \"$KOKORO_BIN\" speak --voice \"$VOICE_KOKORO\" --speed \"$SPEED_KOKORO\" --lang \"$LANG_KOKORO\" --model \"$KOKORO_MODEL\" --play --service off" >/dev/null 2>&1 &
     TTS_PID=$!
     wait "$TTS_PID" 2>/dev/null
   fi
 else
   if [[ -x "$SPEAK_BIN" ]]; then
-    timeout "$CHUNK_TIMEOUT" bash -c "cat \"$TMP\" | \"$SPEAK_BIN\" -v \"$VOICE_SPEAK\" --no-daemon" >/dev/null 2>&1 &
+    timeout "$CHUNK_TIMEOUT" bash -c "cat \"$TMP\" | \"$SPEAK_BIN\" -v \"$VOICE_SPEAK\" -s \"$SPEED_SPEAK\" -l \"$LANG_SPEAK\" --steps \"$SPEAK_STEPS\" --no-daemon" >/dev/null 2>&1 &
     TTS_PID=$!
     wait "$TTS_PID" 2>/dev/null
   fi
