@@ -12,6 +12,7 @@ interface TTSState {
   voice: Record<Engine, string>
   speaking: boolean
   lastSpokenMessageID: string
+  activeProc: ReturnType<typeof spawn> | null
 }
 
 interface SpeakOptions {
@@ -122,6 +123,7 @@ async function synthesize(
   engine: Engine,
   voice: string,
   binaries: Record<Engine, string>,
+  state: TTSState,
 ): Promise<void> {
   const bin = binaries[engine]
   const tmp = join(tmpdir(), `opencode-speak-${Date.now()}.txt`)
@@ -140,12 +142,17 @@ async function synthesize(
       stderr: "pipe",
     })
 
+    state.activeProc = proc
+
     const exitCode = await proc.exited
+    state.activeProc = null
+
     if (exitCode !== 0) {
       const stderr = await new Response(proc.stderr).text()
       throw new Error(`${engine} exited with code ${exitCode}: ${stderr.slice(0, 200)}`)
     }
   } finally {
+    state.activeProc = null
     try { unlinkSync(tmp) } catch {}
   }
 }
@@ -192,6 +199,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     },
     speaking: false,
     lastSpokenMessageID: "",
+    activeProc: null,
   }
 
   syncStateFromConfig(state)
@@ -279,6 +287,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
           state.engine,
           state.voice[state.engine],
           binaries,
+          state,
         )
         await toast("Test complete", "success")
       } catch (err: any) {
@@ -347,7 +356,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
         if (text.length > maxChars) text = text.slice(0, maxChars)
 
         await log("info", `Speaking ${text.length} chars [${state.engine}/${state.voice[state.engine]}]`)
-        await synthesize(text, state.engine, state.voice[state.engine], binaries)
+        await synthesize(text, state.engine, state.voice[state.engine], binaries, state)
       } catch (err: any) {
         await log("error", `TTS error: ${err?.message || String(err)}`)
       } finally {
@@ -358,7 +367,14 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     dispose: async () => {
       state.enabled = false
       state.speaking = false
-      await log("info", "Plugin disposed")
+      if (state.activeProc) {
+        try {
+          process.kill(-state.activeProc.pid, "SIGTERM")
+        } catch {
+          try { state.activeProc.kill(); } catch {}
+        }
+        state.activeProc = null
+      }
     },
   }
 }

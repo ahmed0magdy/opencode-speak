@@ -92,7 +92,12 @@ if [[ ${#TEXT} -lt 5 ]]; then
 fi
 
 TMP=$(mktemp /tmp/opencode-speak-XXXXXX.txt)
-trap 'rm -f "$TMP"' EXIT
+TTS_PID=""
+cleanup() {
+  [[ -n "$TTS_PID" ]] && kill "$TTS_PID" 2>/dev/null; wait "$TTS_PID" 2>/dev/null
+  rm -f "$TMP"
+}
+trap cleanup EXIT INT TERM
 echo "$TEXT" > "$TMP"
 
 KOKORO_BIN=$(command -v kokoro 2>/dev/null || echo "${HOME}/.local/bin/kokoro")
@@ -100,10 +105,14 @@ SPEAK_BIN=$(command -v speak 2>/dev/null || echo "${HOME}/.local/bin/speak")
 
 if [[ "$ENGINE" == "kokoro" ]]; then
   if [[ -x "$KOKORO_BIN" ]]; then
-    cat "$TMP" | "$KOKORO_BIN" speak --voice "$VOICE_KOKORO" --play --service off >/dev/null 2>&1
+    cat "$TMP" | "$KOKORO_BIN" speak --voice "$VOICE_KOKORO" --play --service off >/dev/null 2>&1 &
+    TTS_PID=$!
+    wait "$TTS_PID" 2>/dev/null
   fi
 else
   if [[ -x "$SPEAK_BIN" ]]; then
-    cat "$TMP" | "$SPEAK_BIN" -v "$VOICE_SPEAK" --no-daemon >/dev/null 2>&1
+    cat "$TMP" | "$SPEAK_BIN" -v "$VOICE_SPEAK" --no-daemon >/dev/null 2>&1 &
+    TTS_PID=$!
+    wait "$TTS_PID" 2>/dev/null
   fi
 fi
