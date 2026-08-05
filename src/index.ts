@@ -258,35 +258,12 @@ function formatStatus(state: TTSState): string {
 }
 
 function formatConfig(state: TTSState, availableEngines: Engine[]): string {
+  const engine = state.engine
   const lines = [
-    "═══ opencode-speak config ═══",
+    `TTS: ${state.enabled ? "ON" : "OFF"} | ${engine} | ${state.voice[engine]} | speed:${state.speed[engine]}`,
+    `lang:${state.lang[engine]} | ${engine === "kokoro" ? `model:${state.kokoroModel}` : `steps:${state.speakSteps}`}`,
     "",
-    `  Status:       ${state.enabled ? "ON" : "OFF"}`,
-    `  Engine:       ${state.engine}  [options: ${availableEngines.join(", ")}]`,
-    "",
-    "── Kokoro Settings ──",
-    `  Voice:  ${state.voice.kokoro}  [/tts voices]`,
-    `  Speed:  ${state.speed.kokoro}  [0.5 - 4.0]`,
-    `  Lang:   ${state.lang.kokoro}  [en-us, en-gb, ja, zh, hi, fr, it, pt, es, ko]`,
-    `  Model:  ${state.kokoroModel}  [int8, fp16, full]`,
-    "",
-    "── Supertonic 3 Settings ──",
-    `  Voice:  ${state.voice.speak}  [/tts voices]`,
-    `  Speed:  ${state.speed.speak}  [0.7 - 2.0]`,
-    `  Lang:   ${state.lang.speak}  [auto, na, ar, de, es, fr, hi, it, ja, ko, pt, ru, zh]`,
-    `  Steps:  ${state.speakSteps}  [5-12, higher=better quality]`,
-    "",
-    "── Commands ──",
-    "  /tts on|off        enable/disable",
-    "  /tts kokoro|speak  switch engine",
-    "  /tts voice X       set voice",
-    "  /tts speed X       set speed",
-    "  /tts lang X        set language",
-    "  /tts model X       set kokoro model",
-    "  /tts steps X       set speak quality steps",
-    "  /tts voices        list all voices",
-    "  /tts test          test current config",
-    "═════════════════════════════════",
+    "Set: /tts voice|speed|lang|model|steps|on|off|kokoro|speak|voices|test",
   ]
   return lines.join("\n")
 }
