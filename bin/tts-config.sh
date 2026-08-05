@@ -12,15 +12,16 @@ Commands:
   set <key> <value>      Write a config value
   init                   Initialize config with defaults
   status                 Show all current settings
-  roleplay              Set best warm female voice for current engine
 
-Keys: enabled, engine, voice_kokoro, voice_speak
+Keys: enabled, engine, voice_kokoro, voice_speak, speed_kokoro, speed_speak,
+      lang_kokoro, lang_speak, kokoro_model, speak_steps
 
 Examples:
   tts-config.sh set enabled true
   tts-config.sh set engine kokoro
-  tts-config.sh get voice_kokoro
-  tts-config.sh roleplay
+  tts-config.sh set voice_kokoro af_bella
+  tts-config.sh set speed_kokoro 0.9
+  tts-config.sh set speak_steps 10
   tts-config.sh status
 EOF
 }
@@ -90,28 +91,11 @@ config_status() {
   echo "  Lang:   $(config_get lang_speak)  [auto, na, ar, de, es, fr, hi, it, ja, ko, pt, ru, zh]"
   echo "  Steps:  $(config_get speak_steps)  [5-12, higher=better quality]"
   echo ""
-  echo "── Roleplay Voices (warm/expressive) ──"
-  echo "  Kokoro: af_bella, af_heart, af_sarah, af_kore, af_sky"
-  echo "  Speak:  emma, lily, sara"
-  echo ""
   echo "── Set via: tts-config.sh set <key> <value> ──"
   echo "  Keys: enabled, engine, voice_kokoro, voice_speak,"
   echo "        speed_kokoro, speed_speak, lang_kokoro, lang_speak,"
   echo "        kokoro_model, speak_steps"
   echo "═════════════════════════════════"
-}
-
-config_roleplay() {
-  ensure_dir
-  local engine
-  engine=$(config_get engine)
-  if [[ "$engine" == "kokoro" ]]; then
-    echo -n "af_bella" > "${CONFIG_DIR}/voice_kokoro"
-    echo "Roleplay voice set: af_bella (kokoro) — warm, expressive, A-grade"
-  else
-    echo -n "emma" > "${CONFIG_DIR}/voice_speak"
-    echo "Roleplay voice set: emma (speak) — soft, natural female"
-  fi
 }
 
 if [[ $# -lt 1 ]]; then
@@ -133,9 +117,6 @@ case "$1" in
     ;;
   status)
     config_status
-    ;;
-  roleplay)
-    config_roleplay
     ;;
   *)
     usage
