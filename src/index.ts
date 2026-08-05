@@ -27,13 +27,9 @@ interface SpeakOptions {
   autoStart?: boolean
 }
 
-const KOKORO_FEMALE_VOICES = [
+const KOKORO_ALL_VOICES = [
   "af_heart", "af_bella", "af_nova", "af_sky", "af_jessica",
   "af_nicole", "af_aoede", "af_kore", "af_alloy", "af_river", "af_sarah",
-]
-
-const KOKORO_ALL_VOICES = [
-  ...KOKORO_FEMALE_VOICES,
   "bf_emma", "bf_isabella", "bf_lily", "bf_alice",
   "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam",
   "am_michael", "am_onyx", "am_puck", "am_santa",
@@ -47,11 +43,7 @@ const KOKORO_ALL_VOICES = [
   "zm_yunjian", "zm_yunxi", "zm_yunxia", "zm_yunyang",
 ]
 
-const SPEAK_FEMALE_VOICES = ["sara", "emma", "lily", "maya", "nora"]
-const SPEAK_ALL_VOICES = [
-  ...SPEAK_FEMALE_VOICES,
-  "james", "daniel", "leo", "ryan", "noah",
-]
+const SPEAK_ALL_VOICES = ["sara", "emma", "lily", "maya", "nora", "james", "daniel", "leo", "ryan", "noah"]
 
 const VOICES: Record<Engine, string[]> = {
   kokoro: KOKORO_ALL_VOICES,
@@ -63,6 +55,8 @@ const CHUNK_MAX_CHARS = 300
 const SYNTHESIS_COOLDOWN_MS = 500
 const CHUNK_TIMEOUT_MS = 30_000
 const CONFIG_DIR = join(homedir(), ".config", "opencode-speak")
+const CONFIG_CACHE_MS = 5000
+let lastConfigRead = 0
 
 function readConfig(key: string, fallback: string): string {
   const file = join(CONFIG_DIR, key)
@@ -164,10 +158,9 @@ function chunkText(text: string, maxPerChunk: number): string[] {
       break
     }
 
-    let splitAt = -1
     const searchWindow = remaining.slice(0, maxPerChunk)
+    let splitAt: number
 
-    // Split at sentence boundaries
     const sentenceEnd = Math.max(
       searchWindow.lastIndexOf(". "),
       searchWindow.lastIndexOf("! "),
@@ -178,23 +171,23 @@ function chunkText(text: string, maxPerChunk: number): string[] {
     )
 
     if (sentenceEnd > maxPerChunk * 0.3) {
-      splitAt = sentenceEnd + 1
+      splitAt = sentenceEnd + 2
     } else {
-      // Fall back to comma or space
       const commaAt = searchWindow.lastIndexOf(", ")
       if (commaAt > maxPerChunk * 0.3) {
-        splitAt = commaAt + 1
+        splitAt = commaAt + 2
       } else {
         const spaceAt = searchWindow.lastIndexOf(" ")
-        splitAt = spaceAt > 0 ? spaceAt : maxPerChunk
+        splitAt = spaceAt > 0 ? spaceAt + 1 : maxPerChunk
       }
     }
 
-    chunks.push(remaining.slice(0, splitAt).trim())
+    const piece = remaining.slice(0, splitAt).trim()
+    if (piece.length > 0) chunks.push(piece)
     remaining = remaining.slice(splitAt).trim()
   }
 
-  return chunks.filter(c => c.length > 0)
+  return chunks
 }
 
 function sleep(ms: number): Promise<void> {
@@ -214,10 +207,10 @@ async function synthesize(
   for (const chunk of chunks) {
     if (!state.enabled || !state.speaking) break
 
-    // Enforce cooldown between chunks
     const elapsed = Date.now() - state.lastSynthesisEnd
     if (elapsed < SYNTHESIS_COOLDOWN_MS) {
       await sleep(SYNTHESIS_COOLDOWN_MS - elapsed)
+      if (!state.enabled || !state.speaking) break
     }
 
     const tmp = join(tmpdir(), `opencode-speak-${Date.now()}.txt`)
@@ -237,15 +230,14 @@ async function synthesize(
 
       state.activeProc = proc
 
-      // Race between process exit and timeout
-      const timeout = setTimeout(() => {
+      const killTimer = setTimeout(() => {
         try { process.kill(-proc.pid, "SIGTERM"); } catch {
           try { proc.kill(); } catch {}
         }
       }, CHUNK_TIMEOUT_MS)
 
       const exitCode = await proc.exited
-      clearTimeout(timeout)
+      clearTimeout(killTimer)
       state.activeProc = null
       state.lastSynthesisEnd = Date.now()
 
@@ -542,7 +534,11 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     },
 
     event: async ({ event }) => {
-      syncStateFromConfig(state)
+      const now = Date.now()
+      if (now - lastConfigRead > CONFIG_CACHE_MS) {
+        syncStateFromConfig(state)
+        lastConfigRead = now
+      }
       if (!state.enabled) return
       if (event.type !== "session.idle") return
       if (state.speaking) return
