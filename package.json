@@ -18,7 +18,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ahmed0magdy/opencode-speak.git"
+    "url": "git+https://github.com/ahmed0magdy/opencode-speak.git"
   },
   "bugs": {
     "url": "https://github.com/ahmed0magdy/opencode-speak/issues"
