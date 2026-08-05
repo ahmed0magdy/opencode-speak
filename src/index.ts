@@ -259,13 +259,14 @@ function formatStatus(state: TTSState): string {
 
 function formatConfig(state: TTSState, availableEngines: Engine[]): string {
   const lines = [
-    `═ TTS: ${state.enabled ? "ON" : "OFF"} ═ Engine: ${state.engine} ═`,
+    `═ TTS: ${state.enabled ? "ON" : "OFF"} ═ Engine: ${state.engine} [${availableEngines.join(", ")}] ═`,
     "",
-    `Kokoro  │ voice:${state.voice.kokoro} speed:${state.speed.kokoro} lang:${state.lang.kokoro} model:${state.kokoroModel}`,
-    `Speak   │ voice:${state.voice.speak} speed:${state.speed.speak} lang:${state.lang.speak} steps:${state.speakSteps}`,
+    "Kokoro:",
+    `  Voice: ${state.voice.kokoro}  Speed: ${state.speed.kokoro}  Lang: ${state.lang.kokoro}  Model: ${state.kokoroModel}`,
+    "Supertonic 3:",
+    `  Voice: ${state.voice.speak}  Speed: ${state.speed.speak}  Lang: ${state.lang.speak}  Steps: ${state.speakSteps}`,
     "",
-    `/tts on|off  /tts kokoro|speak  /tts voice X  /tts speed X`,
-    `/tts lang X  /tts model X  /tts steps X  /tts voices  /tts test`,
+    "on|off kokoro|speak voice|speed|lang|model|steps X voices test help",
   ]
   return lines.join("\n")
 }
