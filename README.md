@@ -3,22 +3,64 @@
 [![npm version](https://img.shields.io/npm/v/opencode-speak)](https://www.npmjs.com/package/opencode-speak)
 [![license](https://img.shields.io/npm/l/opencode-speak)](LICENSE)
 
-Text-to-speech plugin for [OpenCode](https://opencode.ai) — hear AI responses spoken aloud using local TTS engines. No cloud, no API keys, no subscriptions, everything runs on your machine.
+Text-to-speech for AI coding assistants — hear responses spoken aloud using local TTS engines. Supports **OpenCode**, **Claude Code**, **Codex CLI**, and **Cursor**. No cloud, no API keys, no subscriptions.
 
 ## Features
 
-- **Two local TTS engines** — [Kokoro](https://github.com/yoav0gal/kokoro-cli) (82M params, 54 voices) and [Supertonic 3](https://github.com/supertone-inc/supertonic) (99M params, 10 voices)
+- **Multi-platform** — works with OpenCode, Claude Code, Codex CLI, and Cursor
+- **Two local TTS engines** — [Kokoro](https://github.com/yoav0gal/kokoro-cli) (82M params, 54 voices) and [Supertonic 3](https://github.com/MohamedAliRashad/speak-cli) (99M params, 10 voices)
 - **100% offline** — no cloud APIs, no tokens, fully private
-- **On-demand** — TTS is off by default, toggle with `/tts on` and `/tts off`
+- **On-demand** — TTS is off by default, toggle on/off any time
 - **No background processes** — models load per-request, zero idle RAM
-- **Switch engines live** — swap between Kokoro and Supertonic without restarting
-- **54+ voices** — multilingual support across English, Japanese, Chinese, Hindi, French, Italian, Portuguese, and more
+- **Shared config** — settings sync across all platforms via `~/.config/opencode-speak/`
+- **54+ voices** — multilingual: English, Japanese, Chinese, Hindi, French, Italian, Portuguese, Spanish, Korean
+
+---
+
+## TTS Engine Comparison
+
+| | Kokoro 82M | Supertonic 3 | Voicebox |
+|---|---|---|---|
+| **Type** | TTS model (CLI) | TTS model (CLI) | Desktop app (wraps other models) |
+| **Architecture** | Decoder-only, ONNX | Flow-matching, ONNX | Tauri + FastAPI |
+| **Parameters** | 82M | 99M | N/A (uses Kokoro, Qwen3-TTS, etc.) |
+| **Quality (MOS)** | 4.44-4.45 | 4.37 (5 steps) | Depends on backend |
+| **Speed (RTF)** | 0.47-0.51 (1.8-2.1x RT) | 0.31 (3.2x RT) | Varies |
+| **Voices** | 54 preset | 10 preset | Unlimited (voice cloning) |
+| **Languages** | 9 | 31 | Depends on backend |
+| **Voice cloning** | No | No | Yes (10-30s sample) |
+| **RAM (idle)** | 0 (--service off) | 0 (--no-daemon) | ~1-2GB |
+| **Model size** | 92MB (int8) | ~400MB | 1-6GB per backend |
+| **GPU required** | No | No | Recommended |
+| **License** | Apache 2.0 | OpenRAIL-M | Proprietary |
+| **CLI** | `kokoro-cli` | `speak-cli` | N/A (HTTP API) |
+
+**Our pick**: Kokoro for quality, Supertonic 3 for speed and language coverage. Both are CPU-only, zero-daemon, and load on-demand.
 
 ---
 
 ## Install
 
-### 1. Install the plugin
+### Step 1: Install a TTS engine
+
+You need at least one. Both are optional — the plugin auto-detects what's available.
+
+```bash
+# Kokoro (recommended) — 92MB model, 54 voices, CPU-optimized
+uv tool install kokoro-cli
+sudo apt install espeak-ng          # required on Linux
+kokoro speak "hello" --play         # downloads model on first run
+
+# Supertonic 3 — 400MB model, 10 voices, 31 languages
+uv tool install speak-cli
+speak "hello"                       # downloads model on first run
+speak --stop                        # stop background daemon after first run
+```
+
+### Step 2: Install for your platform
+
+<details open>
+<summary><b>OpenCode</b></summary>
 
 ```bash
 opencode plugin opencode-speak --global
@@ -30,7 +72,7 @@ Or with npm:
 npm install opencode-speak
 ```
 
-Then add to your OpenCode config (`~/.config/opencode/opencode.jsonc`):
+Add the `/tts` command to `~/.config/opencode/opencode.jsonc`:
 
 ```jsonc
 {
@@ -45,45 +87,94 @@ Then add to your OpenCode config (`~/.config/opencode/opencode.jsonc`):
 }
 ```
 
-> The `opencode plugin` command adds the plugin entry automatically. You only need to add the `command` block manually for the `/tts` slash command.
-
-### 2. Install a TTS engine
-
-You need at least one. Both are optional — the plugin auto-detects what's available.
-
-```bash
-# Kokoro (recommended) — 86MB model, 54 voices, CPU-optimized
-uv tool install kokoro-cli
-sudo apt install espeak-ng          # required dependency on Linux
-kokoro speak "hello" --play         # downloads model on first run
-```
-
-```bash
-# Supertonic 3 — 400MB model, 10 voices, 31 languages
-uv tool install speak-cli
-speak "hello"                       # downloads model on first run
-speak --stop                        # stop background daemon after first run
-```
-
-### 3. Start
-
-Restart OpenCode, type `/tts on`, and start chatting.
-
-<details>
-<summary>Alternative: install from source</summary>
-
-```bash
-git clone https://github.com/ahmed0magdy/opencode-speak.git
-cp opencode-speak/src/index.ts ~/.config/opencode/plugins/opencode-speak.ts
-```
-
-Then add the `command` block to your `opencode.jsonc` (same as above).
+> The `opencode plugin` command adds the plugin entry automatically. You only need to add the `command` block manually.
 
 </details>
 
+<details>
+<summary><b>Claude Code</b></summary>
+
+Clone the repo and point Claude Code at the plugin directory:
+
+```bash
+git clone https://github.com/ahmed0magdy/opencode-speak.git ~/.local/share/opencode-speak
+```
+
+Then add to your Claude Code config (`~/.claude/plugins/`):
+
+```bash
+cp -r ~/.local/share/opencode-speak/claude ~/.claude/plugins/opencode-speak
+```
+
+Or use the `--plugin-dir` flag:
+
+```bash
+claude --plugin-dir ~/.local/share/opencode-speak/claude
+```
+
+The `Stop` hook automatically speaks the assistant's last message when TTS is enabled.
+
+**Enable TTS:**
+```bash
+~/.local/share/opencode-speak/bin/tts-config.sh set enabled true
+```
+
+</details>
+
+<details>
+<summary><b>Codex CLI</b></summary>
+
+Clone the repo and copy the plugin:
+
+```bash
+git clone https://github.com/ahmed0magdy/opencode-speak.git ~/.local/share/opencode-speak
+mkdir -p ~/.codex/plugins
+cp -r ~/.local/share/opencode-speak/codex ~/.codex/plugins/opencode-speak
+```
+
+The `Stop` hook parses the transcript and speaks the last assistant message.
+
+**Enable TTS:**
+```bash
+~/.local/share/opencode-speak/bin/tts-config.sh set enabled true
+```
+
+</details>
+
+<details>
+<summary><b>Cursor</b></summary>
+
+Clone the repo and run the installer:
+
+```bash
+git clone https://github.com/ahmed0magdy/opencode-speak.git ~/.local/share/opencode-speak
+bash ~/.local/share/opencode-speak/cursor/install.sh
+```
+
+This merges a `stop` hook into `~/.cursor/hooks.json` that speaks the assistant's response.
+
+**Enable TTS:**
+```bash
+~/.local/share/opencode-speak/bin/tts-config.sh set enabled true
+```
+
+</details>
+
+### Step 3: Enable and test
+
+```bash
+# Enable TTS (shared across all platforms)
+~/.local/share/opencode-speak/bin/tts-config.sh set enabled true
+
+# Test
+~/.local/share/opencode-speak/bin/tts-speak.sh --text "Hello, TTS is working!"
+```
+
 ---
 
-## Commands
+## Usage
+
+### OpenCode (slash commands)
 
 | Command | Description |
 |---------|-------------|
@@ -97,9 +188,28 @@ Then add the `command` block to your `opencode.jsonc` (same as above).
 | `/tts status` | Show current settings |
 | `/tts help` | Show all commands |
 
+### All platforms (config script)
+
+```bash
+# Enable/disable
+tts-config.sh set enabled true
+tts-config.sh set enabled false
+
+# Switch engine
+tts-config.sh set engine kokoro
+tts-config.sh set engine speak
+
+# Change voice
+tts-config.sh set voice_kokoro af_bella
+tts-config.sh set voice_speak emma
+
+# Show status
+tts-config.sh status
+```
+
 ---
 
-## Configuration (optional)
+## Configuration (OpenCode only)
 
 Pass options when using as an npm plugin:
 
@@ -148,33 +258,61 @@ English (American): `af_*`, `am_*` | English (British): `bf_*`, `bm_*` | Spanish
 
 ## How It Works
 
-1. You type `/tts on` to enable
-2. You chat with the LLM as normal
-3. When the LLM finishes responding (`session.idle` event), the plugin:
-   - Fetches the latest assistant message via the OpenCode SDK
-   - Strips markdown formatting to clean, speakable text
-   - Pipes the text to the selected TTS engine CLI
-   - Audio plays through your system speakers
-4. Type `/tts off` to disable
+### Architecture
 
-No background processes run while TTS is off. Models load on-demand and release memory after each synthesis. Text is piped via temporary files to avoid shell escaping issues. Both engines run with flags that prevent background daemons (`--service off` for Kokoro, `--no-daemon` for speak-cli).
+```
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│   OpenCode   │    │  Claude Code │    │  Codex CLI   │    │    Cursor    │
+│  (TypeScript │    │  (Stop hook  │    │  (Stop hook  │    │  (stop hook  │
+│   plugin)    │    │   + stdin)   │    │ + transcript)│    │ + transcript)│
+└──────┬───────┘    └──────┬───────┘    └──────┬───────┘    └──────┬───────┘
+       │                   │                   │                   │
+       └───────────────────┴───────────────────┴───────────────────┘
+                                    │
+                        ┌───────────▼───────────┐
+                        │   bin/tts-speak.sh    │
+                        │   (shared core)       │
+                        └───────────┬───────────┘
+                                    │
+                        ┌───────────▼───────────┐
+                        │ ~/.config/opencode-   │
+                        │ speak/ (shared state) │
+                        └───────────┬───────────┘
+                                    │
+                     ┌──────────────┼──────────────┐
+                     ▼                             ▼
+            ┌────────────────┐            ┌────────────────┐
+            │  kokoro speak  │            │  speak --no-   │
+            │  --service off │            │  daemon        │
+            └────────────────┘            └────────────────┘
+```
+
+1. Each platform hooks into the "assistant finished responding" event
+2. The hook extracts the last assistant message (method varies by platform)
+3. Text is stripped of markdown formatting
+4. Piped to the selected TTS engine CLI
+5. Audio plays through system speakers
+
+No background processes run while TTS is off. Models load on-demand and release memory after each synthesis.
 
 ---
 
-## Comparison
+## Comparison with Other Tools
 
 | | opencode-speak | [narrate](https://github.com/felores/narrate) | [vox](https://github.com/punt-labs/vox) | [voice-bridge](https://github.com/Tomorrow-You/voice-bridge) | [aftertone](https://github.com/omarelkhal/aftertone) |
 |---|---|---|---|---|---|
 | **Cloud-free** | Yes | Optional | Optional | Optional | Yes |
-| **API keys needed** | No | Depends on provider | Depends on provider | Optional (edge-tts free) | No |
+| **API keys needed** | No | Depends | Depends | Optional | No |
 | **OpenCode** | Yes | Yes | No | No | Soon |
-| **Claude Code** | Planned | Yes | Yes | Yes | Yes |
-| **Cursor** | No | Yes | No | Yes (MCP) | Yes |
-| **Codex** | No | Yes | No | No | Yes |
+| **Claude Code** | Yes | Yes | Yes | Yes | Yes |
+| **Cursor** | Yes | Yes | No | Yes (MCP) | Yes |
+| **Codex CLI** | Yes | Yes | No | No | Yes |
 | **Local engines** | Kokoro, Supertonic 3 | Voicebox, Kokoro | System TTS | Kokoro, espeak-ng | Supertonic ONNX |
-| **Cloud engines** | None | ElevenLabs, OpenAI, Gemini | ElevenLabs, Polly, OpenAI | ElevenLabs, edge-tts | None |
+| **Cloud engines** | None | ElevenLabs, OpenAI, Gemini | ElevenLabs, Polly | ElevenLabs, edge-tts | None |
 | **Background daemon** | No | Yes | Yes | No | Yes |
+| **Idle RAM** | 0 MB | 200-450 MB | Varies | 0 MB | 450 MB |
 | **Install** | One command | Script | Script | Plugin marketplace | Script |
+| **Shared config** | Yes (all platforms) | No | No | No | No |
 
 ---
 
@@ -194,20 +332,53 @@ If you're on WSL2, make sure WSLg is enabled:
 
 ## Uninstall
 
-```bash
-# Remove plugin from opencode config:
-# Delete "opencode-speak" from the "plugin" array in opencode.jsonc
-# Delete the "tts" command entry from opencode.jsonc
+### OpenCode
 
+```bash
+# Remove from opencode.jsonc: delete "opencode-speak" from "plugin" array and "tts" command
 # Or remove local file:
 rm ~/.config/opencode/plugins/opencode-speak.ts
+```
 
-# Remove TTS engines (optional):
+### Claude Code
+
+```bash
+rm -rf ~/.claude/plugins/opencode-speak
+```
+
+### Codex CLI
+
+```bash
+rm -rf ~/.codex/plugins/opencode-speak
+```
+
+### Cursor
+
+Remove the `opencode-speak` hook entry from `~/.cursor/hooks.json`.
+
+### Shared (all platforms)
+
+```bash
+# Remove shared config
+rm -rf ~/.config/opencode-speak
+
+# Remove repo clone
+rm -rf ~/.local/share/opencode-speak
+
+# Remove TTS engines (optional)
 uv tool uninstall kokoro-cli
 uv tool uninstall speak-cli
 rm -rf ~/.local/share/kokoro        # Kokoro models
 rm -rf ~/.cache/supertonic3         # Supertonic 3 models
 ```
+
+---
+
+## Dependencies
+
+- `jq` — JSON parsing for bash hooks (Claude Code, Codex, Cursor): `sudo apt install jq`
+- `kokoro-cli` and/or `speak-cli` — TTS engines (see Install above)
+- `espeak-ng` — required for Kokoro on Linux: `sudo apt install espeak-ng`
 
 ---
 

@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "command": "bash \"$(dirname \"$(dirname \"$(realpath \"$0\")\")\")/../bin/tts-speak.sh\" --stdin-json",
+        "description": "Speak assistant response via TTS",
+        "stdin": true
+      }
+    ]
+  }
+}

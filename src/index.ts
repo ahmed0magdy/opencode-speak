@@ -1,7 +1,7 @@
 import type { Plugin, PluginOptions } from "@opencode-ai/plugin"
 import { spawn } from "bun"
-import { writeFileSync, unlinkSync, existsSync } from "fs"
-import { tmpdir } from "os"
+import { writeFileSync, unlinkSync, existsSync, readFileSync, mkdirSync } from "fs"
+import { tmpdir, homedir } from "os"
 import { join } from "path"
 
 type Engine = "kokoro" | "speak"
@@ -53,6 +53,38 @@ const VOICES: Record<Engine, string[]> = {
 }
 
 const DEFAULT_MAX_CHARS = 2000
+const CONFIG_DIR = join(homedir(), ".config", "opencode-speak")
+
+function readConfig(key: string, fallback: string): string {
+  const file = join(CONFIG_DIR, key)
+  try {
+    return readFileSync(file, "utf-8").trim() || fallback
+  } catch {
+    return fallback
+  }
+}
+
+function writeConfig(key: string, value: string): void {
+  try {
+    mkdirSync(CONFIG_DIR, { recursive: true })
+    writeFileSync(join(CONFIG_DIR, key), value, "utf-8")
+  } catch {}
+}
+
+function syncStateFromConfig(state: TTSState): void {
+  state.enabled = readConfig("enabled", "false") === "true"
+  const engine = readConfig("engine", state.engine)
+  if (engine === "kokoro" || engine === "speak") state.engine = engine
+  state.voice.kokoro = readConfig("voice_kokoro", state.voice.kokoro)
+  state.voice.speak = readConfig("voice_speak", state.voice.speak)
+}
+
+function syncStateToConfig(state: TTSState): void {
+  writeConfig("enabled", state.enabled ? "true" : "false")
+  writeConfig("engine", state.engine)
+  writeConfig("voice_kokoro", state.voice.kokoro)
+  writeConfig("voice_speak", state.voice.speak)
+}
 
 function resolveExecutable(name: string): string | null {
   const localBin = join(process.env.HOME ?? "/root", ".local", "bin", name)
@@ -162,6 +194,8 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     lastSpokenMessageID: "",
   }
 
+  syncStateFromConfig(state)
+
   const availableEngines: Engine[] = []
   if (kokoroBin) availableEngines.push("kokoro")
   if (speakBin) availableEngines.push("speak")
@@ -182,6 +216,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
         return
       }
       state.enabled = true
+      syncStateToConfig(state)
       await toast(formatStatus(state), "success")
       await log("info", "TTS enabled")
       return
@@ -189,6 +224,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
 
     if (args === "off") {
       state.enabled = false
+      syncStateToConfig(state)
       await toast("TTS: OFF", "info")
       await log("info", "TTS disabled")
       return
@@ -201,6 +237,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
         return
       }
       state.engine = engine
+      syncStateToConfig(state)
       await toast(formatStatus(state), "success")
       await log("info", `Switched to engine: ${engine}`)
       return
@@ -223,6 +260,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
         return
       }
       state.voice[state.engine] = v
+      syncStateToConfig(state)
       await toast(formatStatus(state), "success")
       await log("info", `Voice changed to: ${v}`)
       return
@@ -280,6 +318,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     },
 
     event: async ({ event }) => {
+      syncStateFromConfig(state)
       if (!state.enabled) return
       if (event.type !== "session.idle") return
       if (state.speaking) return

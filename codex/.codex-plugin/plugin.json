@@ -1,0 +1,7 @@
+{
+  "name": "opencode-speak",
+  "version": "1.0.0",
+  "description": "TTS voice output for Codex CLI responses using Kokoro or Supertonic 3",
+  "author": "ahmed0magdy",
+  "homepage": "https://github.com/ahmed0magdy/opencode-speak"
+}

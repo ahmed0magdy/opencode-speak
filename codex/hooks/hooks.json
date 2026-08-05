@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "command": "bash \"${PLUGIN_ROOT}/bin/tts-speak.sh\" --transcript \"${transcript_path}\"",
+        "description": "Speak assistant response via TTS"
+      }
+    ]
+  }
+}
