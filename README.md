@@ -17,12 +17,18 @@ Text-to-speech plugin for [OpenCode](https://opencode.ai) — hear AI responses 
 
 ## Install
 
-Add `opencode-speak` to your OpenCode config (`~/.config/opencode/opencode.jsonc`):
+### Step 1: Install the plugin
+
+```bash
+opencode plugin opencode-speak --global
+```
+
+This installs the npm package and adds it to your global OpenCode config automatically.
+
+Then add the `/tts` command to your config (`~/.config/opencode/opencode.jsonc`):
 
 ```jsonc
 {
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-speak"],
   "command": {
     "tts": {
       "template": "$ARGUMENTS",
@@ -32,24 +38,48 @@ Add `opencode-speak` to your OpenCode config (`~/.config/opencode/opencode.jsonc
 }
 ```
 
-Then install at least one TTS engine:
+### Step 2: Install a TTS engine
+
+You need at least one. Both are optional — the plugin auto-detects what's available.
 
 ```bash
-uv tool install kokoro-cli          # Kokoro — 86MB, 54 voices (recommended)
+# Kokoro (recommended) — 86MB model, 54 voices, CPU-optimized
+uv tool install kokoro-cli
 sudo apt install espeak-ng          # required dependency on Linux
+kokoro speak "hello" --play         # downloads model on first run
 ```
 
 ```bash
-uv tool install speak-cli           # Supertonic 3 — 400MB, 10 voices, 31 languages
+# Supertonic 3 — 400MB model, 10 voices, 31 languages
+uv tool install speak-cli
+speak "hello"                       # downloads model on first run
+speak --stop                        # stop background daemon after first run
 ```
 
-Restart OpenCode. Type `/tts on` and start chatting — you'll hear the AI speak.
+### Step 3: Start
 
-> **Alternative:** install from source instead of npm:
-> ```bash
-> git clone https://github.com/ahmed0magdy/opencode-speak.git
-> cp opencode-speak/src/index.ts ~/.config/opencode/plugins/opencode-speak.ts
-> ```
+Restart OpenCode, then type `/tts on` and start chatting — you'll hear the AI speak.
+
+<details>
+<summary>Alternative install methods</summary>
+
+**Manual npm config** — add to `~/.config/opencode/opencode.jsonc`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["opencode-speak"]
+}
+```
+
+**From source** — copy the plugin file directly:
+
+```bash
+git clone https://github.com/ahmed0magdy/opencode-speak.git
+cp opencode-speak/src/index.ts ~/.config/opencode/plugins/opencode-speak.ts
+```
+
+</details>
 
 ---
 
