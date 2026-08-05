@@ -2,46 +2,62 @@
 
 Control text-to-speech voice output in Cursor.
 
+## Config Panel
+
+Run with no arguments to see full configuration:
+
+```bash
+~/.local/share/opencode-speak/bin/tts-config.sh status
+```
+
+Output shows:
+- Current status (on/off)
+- Active engine (kokoro/speak)
+- Current voices for both engines
+- Roleplay voice recommendations
+- Available commands
+
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `/speak on` | Enable TTS |
-| `/speak off` | Disable TTS |
-| `/speak kokoro` | Switch to Kokoro engine |
-| `/speak supertonic` | Switch to Supertonic 3 engine |
-| `/speak voice NAME` | Change voice |
-| `/speak status` | Show current settings |
-| `/speak test` | Speak a test phrase |
+| `status` | Show full config panel |
+| `set enabled true` | Enable TTS |
+| `set enabled false` | Disable TTS |
+| `set engine kokoro` | Switch to Kokoro |
+| `set engine speak` | Switch to Supertonic 3 |
+| `roleplay` | Set best warm female voice |
+| `set voice_kokoro NAME` | Change Kokoro voice |
+| `set voice_speak NAME` | Change Supertonic voice |
 
-## How to Use
-
-After running `cursor/install.sh`, assistant responses are automatically spoken when TTS is enabled. Use the commands above (in your terminal, not in Cursor chat) to control behavior:
+## Quick Setup for Roleplay
 
 ```bash
-# Quick path to config
-CFG=~/.config/opencode-speak
+CFGSH=~/.local/share/opencode-speak/bin/tts-config.sh
 
-# Enable
-echo -n "true" > $CFG/enabled
-
-# Disable
-echo -n "false" > $CFG/enabled
-
-# Switch to kokoro
-echo -n "kokoro" > $CFG/engine
-
-# Switch to supertonic
-echo -n "speak" > $CFG/engine
-
-# Change kokoro voice
-echo -n "af_sky" > $CFG/voice_kokoro
+# Enable + set roleplay voice in one go
+bash "$CFGSH" set enabled true
+bash "$CFGSH" roleplay
 ```
 
-## Available Voices
+## Roleplay Voices (warm, expressive, female)
 
 ### Kokoro
-af_heart, af_sky, af_bella, af_sarah, af_nicole, af_nova, af_river
+- **af_bella** — warm, conversational (A-grade, recommended)
+- **af_heart** — natural narration, flagship
+- **af_sarah** — warm storytelling
+- **af_kore** — calm, friendly
+- **af_sky** — light, youthful
 
 ### Supertonic 3
-sara, zara, aria, luna, elena
+- **emma** — soft, natural (recommended)
+- **lily** — gentle, expressive
+- **sara** — clear, default
+
+## All Voices
+
+### Kokoro Female
+af_heart, af_bella, af_nova, af_sky, af_jessica, af_nicole, af_aoede, af_kore, af_alloy, af_river, af_sarah
+
+### Supertonic 3 Female
+sara, emma, lily, maya, nora

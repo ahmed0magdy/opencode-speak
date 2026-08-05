@@ -12,6 +12,7 @@ Commands:
   set <key> <value>      Write a config value
   init                   Initialize config with defaults
   status                 Show all current settings
+  roleplay              Set best warm female voice for current engine
 
 Keys: enabled, engine, voice_kokoro, voice_speak
 
@@ -19,6 +20,7 @@ Examples:
   tts-config.sh set enabled true
   tts-config.sh set engine kokoro
   tts-config.sh get voice_kokoro
+  tts-config.sh roleplay
   tts-config.sh status
 EOF
 }
@@ -59,11 +61,37 @@ config_init() {
 }
 
 config_status() {
-  echo "opencode-speak configuration (${CONFIG_DIR}):"
-  echo "  enabled:      $(config_get enabled)"
-  echo "  engine:       $(config_get engine)"
-  echo "  voice_kokoro: $(config_get voice_kokoro)"
-  echo "  voice_speak:  $(config_get voice_speak)"
+  echo "═══ opencode-speak config ═══"
+  echo ""
+  echo "  Status:       $(config_get enabled)"
+  echo "  Engine:       $(config_get engine)"
+  echo "  Kokoro voice: $(config_get voice_kokoro)"
+  echo "  Speak voice:  $(config_get voice_speak)"
+  echo ""
+  echo "── Roleplay Voices (warm/expressive) ──"
+  echo "  Kokoro: af_bella, af_heart, af_sarah, af_kore, af_sky"
+  echo "  Speak:  emma, lily, sara"
+  echo ""
+  echo "── Quick Commands ──"
+  echo "  tts-config.sh set enabled true|false"
+  echo "  tts-config.sh set engine kokoro|speak"
+  echo "  tts-config.sh set voice_kokoro af_bella"
+  echo "  tts-config.sh set voice_speak emma"
+  echo "  tts-config.sh roleplay"
+  echo "═════════════════════════════════"
+}
+
+config_roleplay() {
+  ensure_dir
+  local engine
+  engine=$(config_get engine)
+  if [[ "$engine" == "kokoro" ]]; then
+    echo -n "af_bella" > "${CONFIG_DIR}/voice_kokoro"
+    echo "Roleplay voice set: af_bella (kokoro) — warm, expressive, A-grade"
+  else
+    echo -n "emma" > "${CONFIG_DIR}/voice_speak"
+    echo "Roleplay voice set: emma (speak) — soft, natural female"
+  fi
 }
 
 if [[ $# -lt 1 ]]; then
@@ -85,6 +113,9 @@ case "$1" in
     ;;
   status)
     config_status
+    ;;
+  roleplay)
+    config_roleplay
     ;;
   *)
     usage

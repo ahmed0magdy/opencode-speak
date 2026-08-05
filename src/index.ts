@@ -28,6 +28,8 @@ const KOKORO_FEMALE_VOICES = [
   "af_nicole", "af_aoede", "af_kore", "af_alloy", "af_river", "af_sarah",
 ]
 
+const KOKORO_ROLEPLAY_VOICES = ["af_bella", "af_heart", "af_sarah", "af_kore", "af_sky"]
+
 const KOKORO_ALL_VOICES = [
   ...KOKORO_FEMALE_VOICES,
   "bf_emma", "bf_isabella", "bf_lily", "bf_alice",
@@ -44,6 +46,7 @@ const KOKORO_ALL_VOICES = [
 ]
 
 const SPEAK_FEMALE_VOICES = ["sara", "emma", "lily", "maya", "nora"]
+const SPEAK_ROLEPLAY_VOICES = ["emma", "lily", "sara"]
 const SPEAK_ALL_VOICES = [
   ...SPEAK_FEMALE_VOICES,
   "james", "daniel", "leo", "ryan", "noah",
@@ -249,6 +252,34 @@ function formatStatus(state: TTSState): string {
   return `TTS: ON | engine: ${state.engine} | voice: ${state.voice[state.engine]}`
 }
 
+function formatConfig(state: TTSState, availableEngines: Engine[]): string {
+  const lines = [
+    "═══ opencode-speak config ═══",
+    "",
+    `  Status:       ${state.enabled ? "ON" : "OFF"}`,
+    `  Engine:       ${state.engine}${availableEngines.length > 1 ? ` (available: ${availableEngines.join(", ")})` : ""}`,
+    `  Voice:        ${state.voice[state.engine]}`,
+    `  Kokoro voice: ${state.voice.kokoro}`,
+    `  Speak voice:  ${state.voice.speak}`,
+    "",
+    "── Roleplay Voices (warm/expressive) ──",
+    `  Kokoro: ${KOKORO_ROLEPLAY_VOICES.join(", ")}`,
+    `  Speak:  ${SPEAK_ROLEPLAY_VOICES.join(", ")}`,
+    "",
+    "── Commands ──",
+    "  /tts on         enable",
+    "  /tts off        disable",
+    "  /tts kokoro     switch engine",
+    "  /tts speak      switch engine",
+    "  /tts voice X    change voice",
+    "  /tts voices     list all voices",
+    "  /tts roleplay   set best roleplay voice",
+    "  /tts test       test current voice",
+    "═════════════════════════════════",
+  ]
+  return lines.join("\n")
+}
+
 export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions) => {
   const opts = (options ?? {}) as SpeakOptions
 
@@ -301,8 +332,8 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
   )
 
   const handleTTSCommand = async (args: string): Promise<void> => {
-    if (!args || args === "status") {
-      await toast(formatStatus(state), "info")
+    if (!args || args === "status" || args === "config") {
+      await toast(formatConfig(state, availableEngines), "info")
       return
     }
 
@@ -321,6 +352,12 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     if (args === "off") {
       state.enabled = false
       syncStateToConfig(state)
+      if (state.activeProc) {
+        try { process.kill(-state.activeProc.pid, "SIGTERM"); } catch {
+          try { state.activeProc.kill(); } catch {}
+        }
+        state.activeProc = null
+      }
       await toast("TTS: OFF", "info")
       await log("info", "TTS disabled")
       return
@@ -339,9 +376,24 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
       return
     }
 
+    if (args === "roleplay") {
+      const voice = state.engine === "kokoro" ? "af_bella" : "emma"
+      state.voice[state.engine] = voice
+      syncStateToConfig(state)
+      await toast(`Roleplay voice set: ${voice} (${state.engine})`, "success")
+      await log("info", `Roleplay voice: ${voice}`)
+      return
+    }
+
     if (args === "voices") {
       const voices = VOICES[state.engine]
-      await toast(`[${state.engine}] ${voices.join(", ")}`, "info")
+      const femaleLabel = state.engine === "kokoro" ? "Female (roleplay)" : "Female (roleplay)"
+      const roleplay = state.engine === "kokoro" ? KOKORO_ROLEPLAY_VOICES : SPEAK_ROLEPLAY_VOICES
+      const all = voices
+      await toast(
+        `[${state.engine}] ★ ${femaleLabel}: ${roleplay.join(", ")}\n\nAll: ${all.join(", ")}`,
+        "info",
+      )
       return
     }
 
@@ -394,14 +446,16 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     if (args === "help") {
       await toast(
         [
-          "/tts on        — start speaking responses",
-          "/tts off       — stop",
-          "/tts kokoro    — use Kokoro engine",
-          "/tts speak     — use Supertonic 3 engine",
-          "/tts voice X   — change voice",
-          "/tts voices    — list available voices",
-          "/tts test      — speak a test phrase",
-          "/tts status    — show current settings",
+          "/tts             — show config panel",
+          "/tts on          — start speaking responses",
+          "/tts off         — stop (kills active speech)",
+          "/tts kokoro      — use Kokoro engine",
+          "/tts speak       — use Supertonic 3 engine",
+          "/tts roleplay    — set best warm female voice",
+          "/tts voice X     — change voice",
+          "/tts voices      — list voices (★ = roleplay)",
+          "/tts test        — speak a test phrase",
+          "/tts status      — show config panel",
         ].join("\n"),
         "info",
       )

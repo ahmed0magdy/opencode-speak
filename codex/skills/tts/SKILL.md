@@ -8,34 +8,59 @@ After each assistant response, the text is spoken aloud using either Kokoro (82M
 
 ## Control TTS
 
-To control TTS, run these commands in your terminal:
+Run `tts-config.sh` (located at `~/.local/share/opencode-speak/bin/tts-config.sh`):
 
 ```bash
+CFGSH=~/.local/share/opencode-speak/bin/tts-config.sh
+
+# Show full config panel
+bash "$CFGSH" status
+
 # Enable/disable
-~/.config/opencode-speak/../bin/tts-config.sh set enabled true
-~/.config/opencode-speak/../bin/tts-config.sh set enabled false
+bash "$CFGSH" set enabled true
+bash "$CFGSH" set enabled false
 
 # Switch engine
-~/.config/opencode-speak/../bin/tts-config.sh set engine kokoro
-~/.config/opencode-speak/../bin/tts-config.sh set engine speak
+bash "$CFGSH" set engine kokoro
+bash "$CFGSH" set engine speak
 
-# Change voice
-~/.config/opencode-speak/../bin/tts-config.sh set voice_kokoro af_heart
-~/.config/opencode-speak/../bin/tts-config.sh set voice_speak sara
+# Set roleplay voice (best warm female)
+bash "$CFGSH" roleplay
 
-# Show status
-~/.config/opencode-speak/../bin/tts-config.sh status
+# Change voice manually
+bash "$CFGSH" set voice_kokoro af_bella
+bash "$CFGSH" set voice_speak emma
 ```
 
-## Available Voices
+## Roleplay Voices (warm, expressive, female)
 
-### Kokoro (default engine)
-- **Female**: af_heart (default), af_sky, af_bella, af_sarah, af_nicole, af_nova, af_river
-- **Male**: am_adam, am_michael, am_echo
+### Kokoro (A-grade, best quality)
+| Voice | Style | Rating |
+|-------|-------|--------|
+| af_bella | Warm conversational, expressive | A (recommended) |
+| af_heart | Natural narration, flagship | A |
+| af_sarah | Warm storytelling | A |
+| af_kore | Calm, friendly | B |
+| af_sky | Light, youthful | B |
 
 ### Supertonic 3
-- **Female**: sara (default), zara, aria, luna, elena
-- **Male**: leo, dan, milo, kai, raj
+| Voice | Style |
+|-------|-------|
+| emma | Soft, natural (recommended) |
+| lily | Gentle, expressive |
+| sara | Clear, default |
+
+## All Available Voices
+
+### Kokoro (54 voices)
+- **Female (American)**: af_heart, af_bella, af_nova, af_sky, af_jessica, af_nicole, af_aoede, af_kore, af_alloy, af_river, af_sarah
+- **Male (American)**: am_adam, am_echo, am_eric, am_fenrir, am_liam, am_michael, am_onyx, am_puck, am_santa
+- **British**: bf_emma, bf_isabella, bf_lily, bf_alice, bm_daniel, bm_fable, bm_george, bm_lewis
+- **Other languages**: ef_dora, ff_siwis, hf_alpha, hf_beta, if_sara, jf_alpha, pf_dora, zf_xiaobei, +more
+
+### Supertonic 3 (10 voices)
+- **Female**: sara, emma, lily, maya, nora
+- **Male**: james, daniel, leo, ryan, noah
 
 ## Requirements
 
