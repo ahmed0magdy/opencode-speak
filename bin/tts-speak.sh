@@ -2,7 +2,8 @@
 set -euo pipefail
 
 CONFIG_DIR="${HOME}/.config/opencode-speak"
-MAX_CHARS=2000
+MAX_CHARS=1000
+CHUNK_TIMEOUT=30
 
 read_config() {
   local key="$1" default="$2"
@@ -20,6 +21,10 @@ VOICE_KOKORO=$(read_config "voice_kokoro" "af_heart")
 VOICE_SPEAK=$(read_config "voice_speak" "sara")
 
 if [[ "$ENABLED" != "true" ]]; then
+  exit 0
+fi
+
+if ! pactl info >/dev/null 2>&1; then
   exit 0
 fi
 
@@ -105,13 +110,13 @@ SPEAK_BIN=$(command -v speak 2>/dev/null || echo "${HOME}/.local/bin/speak")
 
 if [[ "$ENGINE" == "kokoro" ]]; then
   if [[ -x "$KOKORO_BIN" ]]; then
-    cat "$TMP" | "$KOKORO_BIN" speak --voice "$VOICE_KOKORO" --play --service off >/dev/null 2>&1 &
+    timeout "$CHUNK_TIMEOUT" bash -c "cat \"$TMP\" | \"$KOKORO_BIN\" speak --voice \"$VOICE_KOKORO\" --play --service off" >/dev/null 2>&1 &
     TTS_PID=$!
     wait "$TTS_PID" 2>/dev/null
   fi
 else
   if [[ -x "$SPEAK_BIN" ]]; then
-    cat "$TMP" | "$SPEAK_BIN" -v "$VOICE_SPEAK" --no-daemon >/dev/null 2>&1 &
+    timeout "$CHUNK_TIMEOUT" bash -c "cat \"$TMP\" | \"$SPEAK_BIN\" -v \"$VOICE_SPEAK\" --no-daemon" >/dev/null 2>&1 &
     TTS_PID=$!
     wait "$TTS_PID" 2>/dev/null
   fi

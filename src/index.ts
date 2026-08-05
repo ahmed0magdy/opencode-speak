@@ -13,6 +13,7 @@ interface TTSState {
   speaking: boolean
   lastSpokenMessageID: string
   activeProc: ReturnType<typeof spawn> | null
+  lastSynthesisEnd: number
 }
 
 interface SpeakOptions {
@@ -53,7 +54,10 @@ const VOICES: Record<Engine, string[]> = {
   speak: SPEAK_ALL_VOICES,
 }
 
-const DEFAULT_MAX_CHARS = 2000
+const DEFAULT_MAX_CHARS = 1000
+const CHUNK_MAX_CHARS = 300
+const SYNTHESIS_COOLDOWN_MS = 500
+const CHUNK_TIMEOUT_MS = 30_000
 const CONFIG_DIR = join(homedir(), ".config", "opencode-speak")
 
 function readConfig(key: string, fallback: string): string {
@@ -118,6 +122,69 @@ function stripMarkdown(text: string): string {
     .trim()
 }
 
+async function checkAudioAvailable(): Promise<boolean> {
+  try {
+    const proc = spawn({
+      cmd: ["pactl", "info"],
+      stdout: "ignore",
+      stderr: "ignore",
+    })
+    const code = await proc.exited
+    return code === 0
+  } catch {
+    return false
+  }
+}
+
+function chunkText(text: string, maxPerChunk: number): string[] {
+  if (text.length <= maxPerChunk) return [text]
+
+  const chunks: string[] = []
+  let remaining = text
+
+  while (remaining.length > 0) {
+    if (remaining.length <= maxPerChunk) {
+      chunks.push(remaining)
+      break
+    }
+
+    let splitAt = -1
+    const searchWindow = remaining.slice(0, maxPerChunk)
+
+    // Split at sentence boundaries
+    const sentenceEnd = Math.max(
+      searchWindow.lastIndexOf(". "),
+      searchWindow.lastIndexOf("! "),
+      searchWindow.lastIndexOf("? "),
+      searchWindow.lastIndexOf(".\n"),
+      searchWindow.lastIndexOf("!\n"),
+      searchWindow.lastIndexOf("?\n"),
+    )
+
+    if (sentenceEnd > maxPerChunk * 0.3) {
+      splitAt = sentenceEnd + 1
+    } else {
+      // Fall back to comma or space
+      const commaAt = searchWindow.lastIndexOf(", ")
+      if (commaAt > maxPerChunk * 0.3) {
+        splitAt = commaAt + 1
+      } else {
+        const spaceAt = searchWindow.lastIndexOf(" ")
+        splitAt = spaceAt > 0 ? spaceAt : maxPerChunk
+      }
+    }
+
+    chunks.push(remaining.slice(0, splitAt).trim())
+    remaining = remaining.slice(splitAt).trim()
+  }
+
+  return chunks.filter(c => c.length > 0)
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 async function synthesize(
   text: string,
   engine: Engine,
@@ -126,34 +193,54 @@ async function synthesize(
   state: TTSState,
 ): Promise<void> {
   const bin = binaries[engine]
-  const tmp = join(tmpdir(), `opencode-speak-${Date.now()}.txt`)
+  const chunks = chunkText(text, CHUNK_MAX_CHARS)
 
-  try {
-    writeFileSync(tmp, text, "utf-8")
+  for (const chunk of chunks) {
+    if (!state.enabled || !state.speaking) break
 
-    const cmd =
-      engine === "kokoro"
-        ? `cat "${tmp}" | "${bin}" speak --voice ${voice} --play --service off`
-        : `cat "${tmp}" | "${bin}" -v ${voice} --no-daemon`
-
-    const proc = spawn({
-      cmd: ["bash", "-c", cmd],
-      stdout: "ignore",
-      stderr: "pipe",
-    })
-
-    state.activeProc = proc
-
-    const exitCode = await proc.exited
-    state.activeProc = null
-
-    if (exitCode !== 0) {
-      const stderr = await new Response(proc.stderr).text()
-      throw new Error(`${engine} exited with code ${exitCode}: ${stderr.slice(0, 200)}`)
+    // Enforce cooldown between chunks
+    const elapsed = Date.now() - state.lastSynthesisEnd
+    if (elapsed < SYNTHESIS_COOLDOWN_MS) {
+      await sleep(SYNTHESIS_COOLDOWN_MS - elapsed)
     }
-  } finally {
-    state.activeProc = null
-    try { unlinkSync(tmp) } catch {}
+
+    const tmp = join(tmpdir(), `opencode-speak-${Date.now()}.txt`)
+    try {
+      writeFileSync(tmp, chunk, "utf-8")
+
+      const cmd =
+        engine === "kokoro"
+          ? `cat "${tmp}" | "${bin}" speak --voice ${voice} --play --service off`
+          : `cat "${tmp}" | "${bin}" -v ${voice} --no-daemon`
+
+      const proc = spawn({
+        cmd: ["bash", "-c", cmd],
+        stdout: "ignore",
+        stderr: "pipe",
+      })
+
+      state.activeProc = proc
+
+      // Race between process exit and timeout
+      const timeout = setTimeout(() => {
+        try { process.kill(-proc.pid, "SIGTERM"); } catch {
+          try { proc.kill(); } catch {}
+        }
+      }, CHUNK_TIMEOUT_MS)
+
+      const exitCode = await proc.exited
+      clearTimeout(timeout)
+      state.activeProc = null
+      state.lastSynthesisEnd = Date.now()
+
+      if (exitCode !== 0 && state.enabled) {
+        const stderr = await new Response(proc.stderr).text()
+        throw new Error(`${engine} exited with code ${exitCode}: ${stderr.slice(0, 200)}`)
+      }
+    } finally {
+      state.activeProc = null
+      try { unlinkSync(tmp) } catch {}
+    }
   }
 }
 
@@ -200,6 +287,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     speaking: false,
     lastSpokenMessageID: "",
     activeProc: null,
+    lastSynthesisEnd: 0,
   }
 
   syncStateFromConfig(state)
@@ -279,6 +367,10 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
         await toast(`Engine "${state.engine}" not installed`, "error")
         return
       }
+      if (!await checkAudioAvailable()) {
+        await toast("Audio unavailable — PulseAudio not responding. Try: wsl --shutdown", "error")
+        return
+      }
       state.speaking = true
       await toast(`Testing ${state.engine}/${state.voice[state.engine]}...`, "info")
       try {
@@ -356,6 +448,12 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
         if (text.length > maxChars) text = text.slice(0, maxChars)
 
         await log("info", `Speaking ${text.length} chars [${state.engine}/${state.voice[state.engine]}]`)
+
+        if (!await checkAudioAvailable()) {
+          await log("warn", "PulseAudio unavailable — skipping TTS")
+          return
+        }
+
         await synthesize(text, state.engine, state.voice[state.engine], binaries, state)
       } catch (err: any) {
         await log("error", `TTS error: ${err?.message || String(err)}`)
