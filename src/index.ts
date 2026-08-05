@@ -286,8 +286,8 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
   const log = (level: "info" | "warn" | "error", message: string) =>
     client.app.log({ body: { service: "opencode-speak", level, message } })
 
-  const toast = (message: string, variant: "info" | "success" | "warning" | "error" = "info") =>
-    client.tui.showToast({ body: { message, variant, duration: 4000 } })
+  const toast = (message: string, variant: "info" | "success" | "warning" | "error" = "info", duration = 4000) =>
+    client.tui.showToast({ body: { message, variant, duration } })
 
   const kokoroBin = resolveExecutable("kokoro")
   const speakBin = resolveExecutable("speak")
@@ -333,7 +333,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
 
   const handleTTSCommand = async (args: string): Promise<void> => {
     if (!args || args === "status" || args === "config") {
-      await toast(formatConfig(state, availableEngines), "info")
+      await toast(formatConfig(state, availableEngines), "info", 30000)
       return
     }
 
@@ -393,6 +393,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
       await toast(
         `[${state.engine}] ★ ${femaleLabel}: ${roleplay.join(", ")}\n\nAll: ${all.join(", ")}`,
         "info",
+        20000,
       )
       return
     }
@@ -458,6 +459,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
           "/tts status      — show config panel",
         ].join("\n"),
         "info",
+        20000,
       )
       return
     }
