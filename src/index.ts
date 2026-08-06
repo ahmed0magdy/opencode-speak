@@ -226,6 +226,7 @@ async function synthesize(
         cmd: ["bash", "-c", cmd],
         stdout: "ignore",
         stderr: "pipe",
+        env: { ...process.env, ONNX_PROVIDER: process.env.ONNX_PROVIDER || "CUDAExecutionProvider" },
       })
 
       state.activeProc = proc
@@ -315,8 +316,8 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     },
     speed: { kokoro: "1.0", speak: "1.0" },
     lang: { kokoro: "en-us", speak: "auto" },
-    kokoroModel: "int8",
-    speakSteps: "8",
+    kokoroModel: "full",
+    speakSteps: "12",
     speaking: false,
     lastSpokenMessageID: "",
     activeProc: null,

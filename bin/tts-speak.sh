@@ -23,8 +23,8 @@ SPEED_KOKORO=$(read_config "speed_kokoro" "1.0")
 SPEED_SPEAK=$(read_config "speed_speak" "1.0")
 LANG_KOKORO=$(read_config "lang_kokoro" "en-us")
 LANG_SPEAK=$(read_config "lang_speak" "auto")
-KOKORO_MODEL=$(read_config "kokoro_model" "int8")
-SPEAK_STEPS=$(read_config "speak_steps" "8")
+KOKORO_MODEL=$(read_config "kokoro_model" "full")
+SPEAK_STEPS=$(read_config "speak_steps" "12")
 
 if [[ "$ENABLED" != "true" ]]; then
   exit 0
@@ -113,6 +113,8 @@ echo "$TEXT" > "$TMP"
 
 KOKORO_BIN=$(command -v kokoro 2>/dev/null || echo "${HOME}/.local/bin/kokoro")
 SPEAK_BIN=$(command -v speak 2>/dev/null || echo "${HOME}/.local/bin/speak")
+
+export ONNX_PROVIDER="${ONNX_PROVIDER:-CUDAExecutionProvider}"
 
 if [[ "$ENGINE" == "kokoro" ]]; then
   if [[ -x "$KOKORO_BIN" ]]; then

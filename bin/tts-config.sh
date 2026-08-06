@@ -45,8 +45,8 @@ config_get() {
       speed_speak)   echo "1.0" ;;
       lang_kokoro)   echo "en-us" ;;
       lang_speak)    echo "auto" ;;
-      kokoro_model)  echo "int8" ;;
-      speak_steps)   echo "8" ;;
+      kokoro_model)  echo "full" ;;
+      speak_steps)   echo "12" ;;
       *)             echo "" ;;
     esac
   fi
@@ -68,8 +68,8 @@ config_init() {
   [[ -f "${CONFIG_DIR}/speed_speak" ]]   || echo -n "1.0"      > "${CONFIG_DIR}/speed_speak"
   [[ -f "${CONFIG_DIR}/lang_kokoro" ]]   || echo -n "en-us"    > "${CONFIG_DIR}/lang_kokoro"
   [[ -f "${CONFIG_DIR}/lang_speak" ]]    || echo -n "auto"     > "${CONFIG_DIR}/lang_speak"
-  [[ -f "${CONFIG_DIR}/kokoro_model" ]]  || echo -n "int8"     > "${CONFIG_DIR}/kokoro_model"
-  [[ -f "${CONFIG_DIR}/speak_steps" ]]   || echo -n "8"        > "${CONFIG_DIR}/speak_steps"
+  [[ -f "${CONFIG_DIR}/kokoro_model" ]]  || echo -n "full"     > "${CONFIG_DIR}/kokoro_model"
+  [[ -f "${CONFIG_DIR}/speak_steps" ]]   || echo -n "12"       > "${CONFIG_DIR}/speak_steps"
   echo "Config initialized at ${CONFIG_DIR}"
 }
 
