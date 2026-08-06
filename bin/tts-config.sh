@@ -41,8 +41,8 @@ config_get() {
       engine)        echo "kokoro" ;;
       voice_kokoro)  echo "af_heart" ;;
       voice_speak)   echo "sara" ;;
-      speed_kokoro)  echo "1.0" ;;
-      speed_speak)   echo "1.0" ;;
+      speed_kokoro)  echo "0.9" ;;
+      speed_speak)   echo "0.9" ;;
       lang_kokoro)   echo "en-us" ;;
       lang_speak)    echo "auto" ;;
       kokoro_model)  echo "full" ;;
@@ -64,8 +64,8 @@ config_init() {
   [[ -f "${CONFIG_DIR}/engine" ]]        || echo -n "kokoro"   > "${CONFIG_DIR}/engine"
   [[ -f "${CONFIG_DIR}/voice_kokoro" ]]  || echo -n "af_heart" > "${CONFIG_DIR}/voice_kokoro"
   [[ -f "${CONFIG_DIR}/voice_speak" ]]   || echo -n "sara"     > "${CONFIG_DIR}/voice_speak"
-  [[ -f "${CONFIG_DIR}/speed_kokoro" ]]  || echo -n "1.0"      > "${CONFIG_DIR}/speed_kokoro"
-  [[ -f "${CONFIG_DIR}/speed_speak" ]]   || echo -n "1.0"      > "${CONFIG_DIR}/speed_speak"
+  [[ -f "${CONFIG_DIR}/speed_kokoro" ]]  || echo -n "0.9"      > "${CONFIG_DIR}/speed_kokoro"
+  [[ -f "${CONFIG_DIR}/speed_speak" ]]   || echo -n "0.9"      > "${CONFIG_DIR}/speed_speak"
   [[ -f "${CONFIG_DIR}/lang_kokoro" ]]   || echo -n "en-us"    > "${CONFIG_DIR}/lang_kokoro"
   [[ -f "${CONFIG_DIR}/lang_speak" ]]    || echo -n "auto"     > "${CONFIG_DIR}/lang_speak"
   [[ -f "${CONFIG_DIR}/kokoro_model" ]]  || echo -n "full"     > "${CONFIG_DIR}/kokoro_model"
