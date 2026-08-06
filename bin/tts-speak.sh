@@ -3,7 +3,7 @@ set -euo pipefail
 
 CONFIG_DIR="${HOME}/.config/opencode-speak"
 MAX_CHARS=1000
-CHUNK_TIMEOUT=30
+CHUNK_TIMEOUT=60
 
 read_config() {
   local key="$1" default="$2"
