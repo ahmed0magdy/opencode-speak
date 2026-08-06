@@ -92,23 +92,40 @@ strip_markdown() {
     -e 's/^[[:space:]]*> //g'
 }
 
-TEXT=$(echo "$TEXT" | strip_markdown | tr '\n' ' ' | sed 's/  */ /g')
+sanitize_for_speech() {
+  sed -E \
+    -e 's/--([a-zA-Z][a-zA-Z0-9_-]*)/\1/g' \
+    -e 's/([a-zA-Z0-9_]+)\.([a-z]{1,4}):([0-9]+)/\1 dot \2, line \3/g' \
+    -e 's/([a-zA-Z0-9_]+)\.([a-z]{1,4})/\1 dot \2/g' \
+    -e 's|https?://[^ ]*||g' \
+    -e 's/[<>{}|\\^~`]+/ /g' \
+    -e 's/"{2,}/ /g' \
+    -e "s/'{2,}/ /g" \
+    -e 's/-{2,}/ /g' \
+    -e 's/_{2,}/ /g' \
+    -e 's/={2,}/ /g' \
+    -e 's/0x[0-9a-fA-F]+/hex value/g' \
+    -e 's/  +/ /g'
+}
+
+TEXT=$(echo "$TEXT" | strip_markdown | sanitize_for_speech | tr '\n' ' ' | sed 's/  */ /g')
 TEXT="${TEXT:0:$MAX_CHARS}"
 
 if [[ ${#TEXT} -lt 5 ]]; then
   exit 0
 fi
 
-TMP=$(mktemp /tmp/opencode-speak-XXXXXXXX.txt)
+TMP_TEXT=$(mktemp /tmp/opencode-speak-XXXXXXXX.txt)
+TMP_WAV=$(mktemp /tmp/opencode-speak-XXXXXXXX.wav)
 TTS_PID=""
+PLAYER_PID=""
 cleanup() {
   [[ -n "$TTS_PID" ]] && kill "$TTS_PID" 2>/dev/null; wait "$TTS_PID" 2>/dev/null
-  pkill -f "mpv.*opencode-speak" 2>/dev/null
-  pkill -f "ffplay.*kokoro" 2>/dev/null
-  rm -f "$TMP"
+  [[ -n "$PLAYER_PID" ]] && kill "$PLAYER_PID" 2>/dev/null; wait "$PLAYER_PID" 2>/dev/null
+  rm -f "$TMP_TEXT" "$TMP_WAV"
 }
 trap cleanup EXIT INT TERM
-echo "$TEXT" > "$TMP"
+echo "$TEXT" > "$TMP_TEXT"
 
 KOKORO_BIN=$(command -v kokoro 2>/dev/null || echo "${HOME}/.local/bin/kokoro")
 SPEAK_BIN=$(command -v speak 2>/dev/null || echo "${HOME}/.local/bin/speak")
@@ -117,14 +134,24 @@ export ONNX_PROVIDER="${ONNX_PROVIDER:-CUDAExecutionProvider}"
 
 if [[ "$ENGINE" == "kokoro" ]]; then
   if [[ -x "$KOKORO_BIN" ]]; then
-    "$KOKORO_BIN" speak --voice "$VOICE_KOKORO" --speed "$SPEED_KOKORO" --lang "$LANG_KOKORO" --model "$KOKORO_MODEL" --play --service off < "$TMP" >/dev/null 2>&1 &
+    "$KOKORO_BIN" speak --voice "$VOICE_KOKORO" --speed "$SPEED_KOKORO" --lang "$LANG_KOKORO" --model "$KOKORO_MODEL" -o "$TMP_WAV" --service off < "$TMP_TEXT" >/dev/null 2>&1 &
     TTS_PID=$!
     wait "$TTS_PID" 2>/dev/null
   fi
 else
   if [[ -x "$SPEAK_BIN" ]]; then
-    "$SPEAK_BIN" -v "$VOICE_SPEAK" -s "$SPEED_SPEAK" -l "$LANG_SPEAK" --steps "$SPEAK_STEPS" --no-daemon < "$TMP" >/dev/null 2>&1 &
+    "$SPEAK_BIN" -v "$VOICE_SPEAK" -s "$SPEED_SPEAK" -l "$LANG_SPEAK" --steps "$SPEAK_STEPS" --no-daemon -o "$TMP_WAV" < "$TMP_TEXT" >/dev/null 2>&1 &
     TTS_PID=$!
     wait "$TTS_PID" 2>/dev/null
   fi
+fi
+
+if [[ -s "$TMP_WAV" ]]; then
+  if command -v mpv >/dev/null 2>&1; then
+    mpv --no-terminal --no-video "$TMP_WAV" >/dev/null 2>&1 &
+  elif command -v ffplay >/dev/null 2>&1; then
+    ffplay -nodisp -autoexit "$TMP_WAV" >/dev/null 2>&1 &
+  fi
+  PLAYER_PID=$!
+  wait "$PLAYER_PID" 2>/dev/null
 fi

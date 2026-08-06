@@ -20,6 +20,7 @@ interface TTSState {
   pendingText: string | null
   lastSpokenMessageID: string
   activeProc: ReturnType<typeof spawn> | null
+  playerProc: ReturnType<typeof spawn> | null
   lastSynthesisEnd: number
   audioAvailable: boolean
   audioCheckedAt: number
@@ -140,6 +141,25 @@ function stripMarkdown(text: string): string {
     .trim()
 }
 
+function sanitizeForSpeech(text: string): string {
+  return text
+    .replace(/--(\w[\w-]*)/g, "$1")
+    .replace(/(\w+)\.([a-z]{1,4}):(\d+)/g, "$1 dot $2, line $3")
+    .replace(/(\w+)\.([a-z]{1,4})/g, "$1 dot $2")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[<>{}[\]|\\\/^~`]+/g, " ")
+    .replace(/"{2,}/g, " ")
+    .replace(/'{2,}/g, " ")
+    .replace(/-{2,}/g, " ")
+    .replace(/_{2,}/g, " ")
+    .replace(/={2,}/g, " ")
+    .replace(/\b0x[0-9a-fA-F]+\b/g, "hex value")
+    .replace(/\b[A-Z_]{2,}\b/g, (m) => m.toLowerCase().replace(/_/g, " "))
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+}
+
 function truncateAtWordBoundary(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text
   const cut = text.lastIndexOf(" ", maxLen)
@@ -166,10 +186,11 @@ function killTTS(state: TTSState): void {
     }
     state.activeProc = null
   }
-  const kokoroBin = resolveExecutable("kokoro")
-  const speakBin = resolveExecutable("speak")
-  if (kokoroBin) {
-    try { spawn({ cmd: ["pkill", "-P", "1", "-x", "ffplay"], stdout: "ignore", stderr: "ignore" }) } catch {}
+  if (state.playerProc) {
+    try { process.kill(-state.playerProc.pid, "SIGTERM") } catch {
+      try { state.playerProc.kill() } catch {}
+    }
+    state.playerProc = null
   }
 }
 
@@ -182,35 +203,56 @@ async function synthesize(
 ): Promise<void> {
   const bin = binaries[engine]
   const suffix = randomBytes(8).toString("hex")
-  const tmp = join(tmpdir(), `opencode-speak-${suffix}.txt`)
+  const tmpText = join(tmpdir(), `opencode-speak-${suffix}.txt`)
+  const tmpWav = join(tmpdir(), `opencode-speak-${suffix}.wav`)
 
   try {
-    writeFileSync(tmp, text, "utf-8")
+    writeFileSync(tmpText, text, "utf-8")
 
-    const args: string[] =
+    const synthArgs: string[] =
       engine === "kokoro"
-        ? [bin, "speak", "--voice", voice, "--speed", state.speed.kokoro, "--lang", state.lang.kokoro, "--model", state.kokoroModel, "--play", "--service", "off"]
-        : [bin, "-v", voice, "-s", state.speed.speak, "-l", state.lang.speak, "--steps", state.speakSteps, "--no-daemon"]
+        ? [bin, "speak", "--voice", voice, "--speed", state.speed.kokoro, "--lang", state.lang.kokoro, "--model", state.kokoroModel, "-o", tmpWav, "--service", "off"]
+        : [bin, "-v", voice, "-s", state.speed.speak, "-l", state.lang.speak, "--steps", state.speakSteps, "--no-daemon", "-o", tmpWav]
 
-    const proc = spawn({
-      cmd: ["setsid", ...args],
-      stdin: Bun.file(tmp),
+    const synthProc = spawn({
+      cmd: ["setsid", ...synthArgs],
+      stdin: Bun.file(tmpText),
       stdout: "ignore",
       stderr: "ignore",
       env: { ...process.env, ONNX_PROVIDER: process.env.ONNX_PROVIDER || "CUDAExecutionProvider" },
     })
 
-    state.activeProc = proc
-    const exitCode = await proc.exited
+    state.activeProc = synthProc
+    const synthExit = await synthProc.exited
     state.activeProc = null
-    state.lastSynthesisEnd = Date.now()
 
-    if (exitCode !== 0 && state.enabled) {
-      throw new Error(`${engine} exited ${exitCode}`)
+    if (synthExit !== 0 || !state.enabled) {
+      if (synthExit !== 0 && state.enabled) throw new Error(`${engine} exited ${synthExit}`)
+      return
     }
+
+    if (!existsSync(tmpWav)) throw new Error("No audio produced")
+
+    const player = existsSync("/usr/bin/mpv") ? "mpv" : "ffplay"
+    const playerArgs = player === "mpv"
+      ? [player, "--no-terminal", "--no-video", tmpWav]
+      : [player, "-nodisp", "-autoexit", tmpWav]
+
+    const playProc = spawn({
+      cmd: ["setsid", ...playerArgs],
+      stdout: "ignore",
+      stderr: "ignore",
+    })
+
+    state.playerProc = playProc
+    const playExit = await playProc.exited
+    state.playerProc = null
+    state.lastSynthesisEnd = Date.now()
   } finally {
     state.activeProc = null
-    try { unlinkSync(tmp) } catch {}
+    state.playerProc = null
+    try { unlinkSync(tmpText) } catch {}
+    try { unlinkSync(tmpWav) } catch {}
   }
 }
 
@@ -281,6 +323,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     pendingText: null,
     lastSpokenMessageID: readConfig("last_message_id_opencode", ""),
     activeProc: null,
+    playerProc: null,
     lastSynthesisEnd: 0,
     audioAvailable: true,
     audioCheckedAt: 0,
@@ -515,7 +558,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
           .filter((p: any) => p.type === "text")
           .map((p: any) => p.text ?? "")
 
-        let text = stripMarkdown(textParts.join("\n"))
+        let text = sanitizeForSpeech(stripMarkdown(textParts.join("\n")))
         if (!text || text.length < 5) return
         text = truncateAtWordBoundary(text, maxChars)
 
