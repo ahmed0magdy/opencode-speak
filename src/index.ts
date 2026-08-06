@@ -1,8 +1,10 @@
 import type { Plugin, PluginOptions } from "@opencode-ai/plugin"
 import { spawn } from "bun"
-import { writeFileSync, unlinkSync, existsSync, readFileSync, mkdirSync } from "fs"
+import { unlinkSync, existsSync, mkdirSync } from "fs"
+import { readFile, writeFile } from "fs/promises"
 import { tmpdir, homedir } from "os"
 import { join } from "path"
+import { randomBytes } from "crypto"
 
 type Engine = "kokoro" | "speak"
 
@@ -50,56 +52,65 @@ const VOICES: Record<Engine, string[]> = {
   speak: SPEAK_ALL_VOICES,
 }
 
+const VALID_KOKORO_LANGS = ["en-us", "en-gb", "ja", "zh", "hi", "fr", "it", "pt", "es", "ko"]
+const VALID_SPEAK_LANGS = ["auto", "na", "ar", "de", "es", "fr", "hi", "it", "ja", "ko", "pt", "ru", "zh"]
+const VALID_MODELS = ["int8", "fp16", "full"]
+
 const DEFAULT_MAX_CHARS = 2000
 const CONFIG_DIR = join(homedir(), ".config", "opencode-speak")
 const CONFIG_CACHE_MS = 5000
 let lastConfigRead = 0
 
-function readConfig(key: string, fallback: string): string {
+function readConfigSync(key: string, fallback: string): string {
   const file = join(CONFIG_DIR, key)
   try {
-    return readFileSync(file, "utf-8").trim() || fallback
+    const { readFileSync } = require("fs")
+    return (readFileSync(file, "utf-8") as string).trim() || fallback
   } catch {
     return fallback
   }
 }
 
-function writeConfig(key: string, value: string): void {
+async function writeConfigAsync(key: string, value: string): Promise<void> {
   try {
     mkdirSync(CONFIG_DIR, { recursive: true })
-    writeFileSync(join(CONFIG_DIR, key), value, "utf-8")
-  } catch {}
+    await writeFile(join(CONFIG_DIR, key), value, "utf-8")
+  } catch (err: any) {
+    console.error(`[opencode-speak] config write failed: ${key}=${value}: ${err?.message}`)
+  }
 }
 
 function syncStateFromConfig(state: TTSState): void {
-  state.enabled = readConfig("enabled", "false") === "true"
-  const engine = readConfig("engine", state.engine)
+  state.enabled = readConfigSync("enabled", "false") === "true"
+  const engine = readConfigSync("engine", state.engine)
   if (engine === "kokoro" || engine === "speak") state.engine = engine
-  state.voice.kokoro = readConfig("voice_kokoro", state.voice.kokoro)
-  state.voice.speak = readConfig("voice_speak", state.voice.speak)
-  state.speed.kokoro = readConfig("speed_kokoro", state.speed.kokoro)
-  state.speed.speak = readConfig("speed_speak", state.speed.speak)
-  state.lang.kokoro = readConfig("lang_kokoro", state.lang.kokoro)
-  state.lang.speak = readConfig("lang_speak", state.lang.speak)
-  state.kokoroModel = readConfig("kokoro_model", state.kokoroModel)
-  state.speakSteps = readConfig("speak_steps", state.speakSteps)
+  state.voice.kokoro = readConfigSync("voice_kokoro", state.voice.kokoro)
+  state.voice.speak = readConfigSync("voice_speak", state.voice.speak)
+  state.speed.kokoro = readConfigSync("speed_kokoro", state.speed.kokoro)
+  state.speed.speak = readConfigSync("speed_speak", state.speed.speak)
+  state.lang.kokoro = readConfigSync("lang_kokoro", state.lang.kokoro)
+  state.lang.speak = readConfigSync("lang_speak", state.lang.speak)
+  state.kokoroModel = readConfigSync("kokoro_model", state.kokoroModel)
+  state.speakSteps = readConfigSync("speak_steps", state.speakSteps)
 }
 
-function syncStateToConfig(state: TTSState): void {
-  writeConfig("enabled", state.enabled ? "true" : "false")
-  writeConfig("engine", state.engine)
-  writeConfig("voice_kokoro", state.voice.kokoro)
-  writeConfig("voice_speak", state.voice.speak)
-  writeConfig("speed_kokoro", state.speed.kokoro)
-  writeConfig("speed_speak", state.speed.speak)
-  writeConfig("lang_kokoro", state.lang.kokoro)
-  writeConfig("lang_speak", state.lang.speak)
-  writeConfig("kokoro_model", state.kokoroModel)
-  writeConfig("speak_steps", state.speakSteps)
+async function syncStateToConfig(state: TTSState): Promise<void> {
+  await Promise.all([
+    writeConfigAsync("enabled", state.enabled ? "true" : "false"),
+    writeConfigAsync("engine", state.engine),
+    writeConfigAsync("voice_kokoro", state.voice.kokoro),
+    writeConfigAsync("voice_speak", state.voice.speak),
+    writeConfigAsync("speed_kokoro", state.speed.kokoro),
+    writeConfigAsync("speed_speak", state.speed.speak),
+    writeConfigAsync("lang_kokoro", state.lang.kokoro),
+    writeConfigAsync("lang_speak", state.lang.speak),
+    writeConfigAsync("kokoro_model", state.kokoroModel),
+    writeConfigAsync("speak_steps", state.speakSteps),
+  ])
 }
 
 function resolveExecutable(name: string): string | null {
-  const localBin = join(process.env.HOME ?? "/root", ".local", "bin", name)
+  const localBin = join(homedir(), ".local", "bin", name)
   if (existsSync(localBin)) return localBin
 
   const paths = (process.env.PATH ?? "").split(":")
@@ -131,16 +142,24 @@ function stripMarkdown(text: string): string {
 
 async function checkAudioAvailable(): Promise<boolean> {
   try {
-    const proc = spawn({
-      cmd: ["pactl", "info"],
-      stdout: "ignore",
-      stderr: "ignore",
-    })
-    const code = await proc.exited
-    return code === 0
+    const proc = spawn({ cmd: ["pactl", "info"], stdout: "ignore", stderr: "ignore" })
+    return (await proc.exited) === 0
   } catch {
     return false
   }
+}
+
+function killTTS(state: TTSState): void {
+  if (state.activeProc) {
+    try { process.kill(-state.activeProc.pid, "SIGTERM") } catch {
+      try { state.activeProc.kill() } catch {}
+    }
+    state.activeProc = null
+  }
+  try { spawn({ cmd: ["pkill", "-f", "ffplay.*kokoro"], stdout: "ignore", stderr: "ignore" }) } catch {}
+  try { spawn({ cmd: ["pkill", "-f", "ffplay.*opencode-speak"], stdout: "ignore", stderr: "ignore" }) } catch {}
+  try { spawn({ cmd: ["pkill", "-f", "mpv.*kokoro"], stdout: "ignore", stderr: "ignore" }) } catch {}
+  try { spawn({ cmd: ["pkill", "-f", "mpv.*opencode-speak"], stdout: "ignore", stderr: "ignore" }) } catch {}
 }
 
 async function synthesize(
@@ -151,18 +170,20 @@ async function synthesize(
   state: TTSState,
 ): Promise<void> {
   const bin = binaries[engine]
-  const tmp = join(tmpdir(), `opencode-speak-${Date.now()}.txt`)
+  const suffix = randomBytes(8).toString("hex")
+  const tmp = join(tmpdir(), `opencode-speak-${suffix}.txt`)
 
   try {
-    writeFileSync(tmp, text, "utf-8")
+    await writeFile(tmp, text, "utf-8")
 
-    const cmd =
+    const args: string[] =
       engine === "kokoro"
-        ? `"${bin}" speak --voice ${voice} --speed ${state.speed.kokoro} --lang ${state.lang.kokoro} --model ${state.kokoroModel} --play --service off < "${tmp}"`
-        : `"${bin}" -v ${voice} -s ${state.speed.speak} -l ${state.lang.speak} --steps ${state.speakSteps} --no-daemon < "${tmp}"`
+        ? [bin, "speak", "--voice", voice, "--speed", state.speed.kokoro, "--lang", state.lang.kokoro, "--model", state.kokoroModel, "--play", "--service", "off"]
+        : [bin, "-v", voice, "-s", state.speed.speak, "-l", state.lang.speak, "--steps", state.speakSteps, "--no-daemon"]
 
     const proc = spawn({
-      cmd: ["setsid", "bash", "-c", cmd],
+      cmd: ["setsid", ...args],
+      stdin: Bun.file(tmp),
       stdout: "ignore",
       stderr: "pipe",
       env: { ...process.env, ONNX_PROVIDER: process.env.ONNX_PROVIDER || "CUDAExecutionProvider" },
@@ -176,7 +197,7 @@ async function synthesize(
 
     if (exitCode !== 0 && state.enabled) {
       const stderr = await new Response(proc.stderr).text()
-      throw new Error(`${engine} exited with code ${exitCode}: ${stderr.slice(0, 200)}`)
+      throw new Error(`${engine} exited ${exitCode}: ${stderr.slice(0, 200)}`)
     }
   } finally {
     state.activeProc = null
@@ -250,7 +271,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     kokoroModel: "full",
     speakSteps: "12",
     speaking: false,
-    lastSpokenMessageID: readConfig("last_message_id", ""),
+    lastSpokenMessageID: readConfigSync("last_message_id", ""),
     activeProc: null,
     lastSynthesisEnd: 0,
   }
@@ -277,7 +298,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
         return
       }
       state.enabled = true
-      syncStateToConfig(state)
+      await syncStateToConfig(state)
       await toast(formatStatus(state), "success")
       await log("info", "TTS enabled")
       return
@@ -286,17 +307,8 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     if (args === "off") {
       state.enabled = false
       state.speaking = false
-      syncStateToConfig(state)
-      if (state.activeProc) {
-        try { process.kill(-state.activeProc.pid, "SIGTERM"); } catch {
-          try { state.activeProc.kill(); } catch {}
-        }
-        state.activeProc = null
-      }
-      try {
-        spawn({ cmd: ["pkill", "-f", "ffplay.*kokoro"], stdout: "ignore", stderr: "ignore" })
-        spawn({ cmd: ["pkill", "-f", "ffplay.*speak"], stdout: "ignore", stderr: "ignore" })
-      } catch {}
+      await syncStateToConfig(state)
+      killTTS(state)
       await toast("TTS: OFF", "info")
       await log("info", "TTS disabled")
       return
@@ -309,7 +321,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
         return
       }
       state.engine = engine
-      syncStateToConfig(state)
+      await syncStateToConfig(state)
       await toast(formatStatus(state), "success")
       await log("info", `Switched to engine: ${engine}`)
       return
@@ -317,11 +329,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
 
     if (args === "voices") {
       const voices = VOICES[state.engine]
-      await toast(
-        `[${state.engine}] All voices:\n${voices.join(", ")}`,
-        "info",
-        20000,
-      )
+      await toast(`[${state.engine}] All voices:\n${voices.join(", ")}`, "info", 20000)
       return
     }
 
@@ -336,7 +344,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
         return
       }
       state.voice[state.engine] = v
-      syncStateToConfig(state)
+      await syncStateToConfig(state)
       await toast(formatStatus(state), "success")
       await log("info", `Voice changed to: ${v}`)
       return
@@ -352,35 +360,32 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
         return
       }
       state.speed[state.engine] = val.toString()
-      syncStateToConfig(state)
+      await syncStateToConfig(state)
       await toast(`Speed set: ${val} (${state.engine})`, "success")
       return
     }
 
     if (args.startsWith("lang ")) {
       const val = args.slice(5).trim()
-      const validKokoro = ["en-us", "en-gb", "ja", "zh", "hi", "fr", "it", "pt", "es", "ko"]
-      const validSpeak = ["auto", "na", "ar", "de", "es", "fr", "hi", "it", "ja", "ko", "pt", "ru", "zh"]
-      const valid = state.engine === "kokoro" ? validKokoro : validSpeak
+      const valid = state.engine === "kokoro" ? VALID_KOKORO_LANGS : VALID_SPEAK_LANGS
       if (!valid.includes(val)) {
         await toast(`Invalid lang "${val}". Options: ${valid.join(", ")}`, "warning")
         return
       }
       state.lang[state.engine] = val
-      syncStateToConfig(state)
+      await syncStateToConfig(state)
       await toast(`Language set: ${val} (${state.engine})`, "success")
       return
     }
 
     if (args.startsWith("model ")) {
       const val = args.slice(6).trim()
-      const valid = ["int8", "fp16", "full"]
-      if (!valid.includes(val)) {
-        await toast(`Invalid model. Options: ${valid.join(", ")}`, "warning")
+      if (!VALID_MODELS.includes(val)) {
+        await toast(`Invalid model. Options: ${VALID_MODELS.join(", ")}`, "warning")
         return
       }
       state.kokoroModel = val
-      syncStateToConfig(state)
+      await syncStateToConfig(state)
       await toast(`Kokoro model set: ${val}`, "success")
       return
     }
@@ -392,7 +397,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
         return
       }
       state.speakSteps = val.toString()
-      syncStateToConfig(state)
+      await syncStateToConfig(state)
       await toast(`Speak steps set: ${val}`, "success")
       return
     }
@@ -411,10 +416,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
       try {
         await synthesize(
           "Hello! This is your text-to-speech voice. How do I sound?",
-          state.engine,
-          state.voice[state.engine],
-          binaries,
-          state,
+          state.engine, state.voice[state.engine], binaries, state,
         )
         await toast("Test complete", "success")
       } catch (err: any) {
@@ -442,8 +444,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
           "/tts voices      — list all voices",
           "/tts test        — test current config",
         ].join("\n"),
-        "info",
-        20000,
+        "info", 20000,
       )
       return
     }
@@ -459,69 +460,59 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     },
 
     event: async ({ event }) => {
+      if (event.type !== "session.idle") return
+      if (state.speaking) return
+
       const now = Date.now()
       if (now - lastConfigRead > CONFIG_CACHE_MS) {
         syncStateFromConfig(state)
         lastConfigRead = now
       }
       if (!state.enabled) return
-      if (event.type !== "session.idle") return
-      if (state.speaking) return
 
       const sessionID = (event as any).properties?.sessionID
       if (!sessionID) return
 
       state.speaking = true
-      try {
-        const resp = await client.session.messages({ path: { id: sessionID } })
-        const messages = (resp as any)?.data ?? resp
-        if (!Array.isArray(messages) || messages.length === 0) return
+      synthesize_background: {
+        try {
+          const resp = await client.session.messages({ path: { id: sessionID } })
+          const messages = (resp as any)?.data ?? resp
+          if (!Array.isArray(messages) || messages.length === 0) break synthesize_background
+          const last = messages[messages.length - 1]
+          if (!last.info || last.info.role !== "assistant") break synthesize_background
+          if (last.info.id === state.lastSpokenMessageID) break synthesize_background
 
-        const last = messages[messages.length - 1]
-        if (!last.info || last.info.role !== "assistant") return
-        if (last.info.id === state.lastSpokenMessageID) return
+          state.lastSpokenMessageID = last.info.id
+          writeConfigAsync("last_message_id", last.info.id)
 
-        state.lastSpokenMessageID = last.info.id
-        writeConfig("last_message_id", last.info.id)
+          const textParts = (last.parts ?? [])
+            .filter((p: any) => p.type === "text")
+            .map((p: any) => p.text ?? "")
 
-        const textParts = (last.parts ?? [])
-          .filter((p: any) => p.type === "text")
-          .map((p: any) => p.text ?? "")
+          let text = stripMarkdown(textParts.join("\n"))
+          if (!text || text.length < 5) break synthesize_background
+          if (text.length > maxChars) text = text.slice(0, maxChars)
 
-        let text = stripMarkdown(textParts.join("\n"))
-        if (!text || text.length < 5) return
-        if (text.length > maxChars) text = text.slice(0, maxChars)
+          await log("info", `Speaking ${text.length} chars [${state.engine}/${state.voice[state.engine]}]`)
 
-        await log("info", `Speaking ${text.length} chars [${state.engine}/${state.voice[state.engine]}]`)
+          if (!await checkAudioAvailable()) {
+            await log("warn", "PulseAudio unavailable — skipping TTS")
+            break synthesize_background
+          }
 
-        if (!await checkAudioAvailable()) {
-          await log("warn", "PulseAudio unavailable — skipping TTS")
-          return
+          await synthesize(text, state.engine, state.voice[state.engine], binaries, state)
+        } catch (err: any) {
+          await log("error", `TTS error: ${err?.message || String(err)}`)
         }
-
-        await synthesize(text, state.engine, state.voice[state.engine], binaries, state)
-      } catch (err: any) {
-        await log("error", `TTS error: ${err?.message || String(err)}`)
-      } finally {
-        state.speaking = false
       }
+      state.speaking = false
     },
 
     dispose: async () => {
       state.enabled = false
       state.speaking = false
-      if (state.activeProc) {
-        try {
-          process.kill(-state.activeProc.pid, "SIGTERM")
-        } catch {
-          try { state.activeProc.kill(); } catch {}
-        }
-        state.activeProc = null
-      }
-      try {
-        spawn({ cmd: ["pkill", "-f", "ffplay.*kokoro"], stdout: "ignore", stderr: "ignore" })
-        spawn({ cmd: ["pkill", "-f", "ffplay.*speak"], stdout: "ignore", stderr: "ignore" })
-      } catch {}
+      killTTS(state)
     },
   }
 }
