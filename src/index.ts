@@ -50,9 +50,7 @@ const VOICES: Record<Engine, string[]> = {
   speak: SPEAK_ALL_VOICES,
 }
 
-const DEFAULT_MAX_CHARS = 1000
-const CHUNK_MAX_CHARS = 300
-const SYNTHESIS_COOLDOWN_MS = 500
+const DEFAULT_MAX_CHARS = 2000
 const CONFIG_DIR = join(homedir(), ".config", "opencode-speak")
 const CONFIG_CACHE_MS = 5000
 let lastConfigRead = 0
@@ -145,54 +143,6 @@ async function checkAudioAvailable(): Promise<boolean> {
   }
 }
 
-function chunkText(text: string, maxPerChunk: number): string[] {
-  if (text.length <= maxPerChunk) return [text]
-
-  const chunks: string[] = []
-  let remaining = text
-
-  while (remaining.length > 0) {
-    if (remaining.length <= maxPerChunk) {
-      chunks.push(remaining)
-      break
-    }
-
-    const searchWindow = remaining.slice(0, maxPerChunk)
-    let splitAt: number
-
-    const sentenceEnd = Math.max(
-      searchWindow.lastIndexOf(". "),
-      searchWindow.lastIndexOf("! "),
-      searchWindow.lastIndexOf("? "),
-      searchWindow.lastIndexOf(".\n"),
-      searchWindow.lastIndexOf("!\n"),
-      searchWindow.lastIndexOf("?\n"),
-    )
-
-    if (sentenceEnd > maxPerChunk * 0.3) {
-      splitAt = sentenceEnd + 2
-    } else {
-      const commaAt = searchWindow.lastIndexOf(", ")
-      if (commaAt > maxPerChunk * 0.3) {
-        splitAt = commaAt + 2
-      } else {
-        const spaceAt = searchWindow.lastIndexOf(" ")
-        splitAt = spaceAt > 0 ? spaceAt + 1 : maxPerChunk
-      }
-    }
-
-    const piece = remaining.slice(0, splitAt).trim()
-    if (piece.length > 0) chunks.push(piece)
-    remaining = remaining.slice(splitAt).trim()
-  }
-
-  return chunks
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
 async function synthesize(
   text: string,
   engine: Engine,
@@ -201,47 +151,36 @@ async function synthesize(
   state: TTSState,
 ): Promise<void> {
   const bin = binaries[engine]
-  const chunks = chunkText(text, CHUNK_MAX_CHARS)
+  const tmp = join(tmpdir(), `opencode-speak-${Date.now()}.txt`)
 
-  for (const chunk of chunks) {
-    if (!state.enabled || !state.speaking) break
+  try {
+    writeFileSync(tmp, text, "utf-8")
 
-    const elapsed = Date.now() - state.lastSynthesisEnd
-    if (elapsed < SYNTHESIS_COOLDOWN_MS) {
-      await sleep(SYNTHESIS_COOLDOWN_MS - elapsed)
-      if (!state.enabled || !state.speaking) break
+    const cmd =
+      engine === "kokoro"
+        ? `"${bin}" speak --voice ${voice} --speed ${state.speed.kokoro} --lang ${state.lang.kokoro} --model ${state.kokoroModel} --play --service off < "${tmp}"`
+        : `"${bin}" -v ${voice} -s ${state.speed.speak} -l ${state.lang.speak} --steps ${state.speakSteps} --no-daemon < "${tmp}"`
+
+    const proc = spawn({
+      cmd: ["setsid", "bash", "-c", cmd],
+      stdout: "ignore",
+      stderr: "pipe",
+      env: { ...process.env, ONNX_PROVIDER: process.env.ONNX_PROVIDER || "CUDAExecutionProvider" },
+    })
+
+    state.activeProc = proc
+
+    const exitCode = await proc.exited
+    state.activeProc = null
+    state.lastSynthesisEnd = Date.now()
+
+    if (exitCode !== 0 && state.enabled) {
+      const stderr = await new Response(proc.stderr).text()
+      throw new Error(`${engine} exited with code ${exitCode}: ${stderr.slice(0, 200)}`)
     }
-
-    const tmp = join(tmpdir(), `opencode-speak-${Date.now()}.txt`)
-    try {
-      writeFileSync(tmp, chunk, "utf-8")
-
-      const cmd =
-        engine === "kokoro"
-          ? `cat "${tmp}" | "${bin}" speak --voice ${voice} --speed ${state.speed.kokoro} --lang ${state.lang.kokoro} --model ${state.kokoroModel} --play --service off`
-          : `cat "${tmp}" | "${bin}" -v ${voice} -s ${state.speed.speak} -l ${state.lang.speak} --steps ${state.speakSteps} --no-daemon`
-
-      const proc = spawn({
-        cmd: ["bash", "-c", cmd],
-        stdout: "ignore",
-        stderr: "pipe",
-        env: { ...process.env, ONNX_PROVIDER: process.env.ONNX_PROVIDER || "CUDAExecutionProvider" },
-      })
-
-      state.activeProc = proc
-
-      const exitCode = await proc.exited
-      state.activeProc = null
-      state.lastSynthesisEnd = Date.now()
-
-      if (exitCode !== 0 && state.enabled) {
-        const stderr = await new Response(proc.stderr).text()
-        throw new Error(`${engine} exited with code ${exitCode}: ${stderr.slice(0, 200)}`)
-      }
-    } finally {
-      state.activeProc = null
-      try { unlinkSync(tmp) } catch {}
-    }
+  } finally {
+    state.activeProc = null
+    try { unlinkSync(tmp) } catch {}
   }
 }
 
@@ -311,7 +250,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     kokoroModel: "full",
     speakSteps: "12",
     speaking: false,
-    lastSpokenMessageID: "",
+    lastSpokenMessageID: readConfig("last_message_id", ""),
     activeProc: null,
     lastSynthesisEnd: 0,
   }
@@ -346,6 +285,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
 
     if (args === "off") {
       state.enabled = false
+      state.speaking = false
       syncStateToConfig(state)
       if (state.activeProc) {
         try { process.kill(-state.activeProc.pid, "SIGTERM"); } catch {
@@ -353,6 +293,10 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
         }
         state.activeProc = null
       }
+      try {
+        spawn({ cmd: ["pkill", "-f", "ffplay.*kokoro"], stdout: "ignore", stderr: "ignore" })
+        spawn({ cmd: ["pkill", "-f", "ffplay.*speak"], stdout: "ignore", stderr: "ignore" })
+      } catch {}
       await toast("TTS: OFF", "info")
       await log("info", "TTS disabled")
       return
@@ -399,10 +343,11 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     }
 
     if (args.startsWith("speed ")) {
-      const val = parseFloat(args.slice(6).trim())
+      const raw = args.slice(6).trim()
+      const val = Number(raw)
       const min = state.engine === "kokoro" ? 0.5 : 0.7
       const max = state.engine === "kokoro" ? 4.0 : 2.0
-      if (isNaN(val) || val < min || val > max) {
+      if (!raw || isNaN(val) || val < min || val > max) {
         await toast(`Speed must be ${min}-${max} for ${state.engine}`, "warning")
         return
       }
@@ -537,6 +482,7 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
         if (last.info.id === state.lastSpokenMessageID) return
 
         state.lastSpokenMessageID = last.info.id
+        writeConfig("last_message_id", last.info.id)
 
         const textParts = (last.parts ?? [])
           .filter((p: any) => p.type === "text")
@@ -572,6 +518,10 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
         }
         state.activeProc = null
       }
+      try {
+        spawn({ cmd: ["pkill", "-f", "ffplay.*kokoro"], stdout: "ignore", stderr: "ignore" })
+        spawn({ cmd: ["pkill", "-f", "ffplay.*speak"], stdout: "ignore", stderr: "ignore" })
+      } catch {}
     },
   }
 }

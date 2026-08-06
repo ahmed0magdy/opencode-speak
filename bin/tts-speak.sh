@@ -2,7 +2,7 @@
 set -euo pipefail
 
 CONFIG_DIR="${HOME}/.config/opencode-speak"
-MAX_CHARS=1000
+MAX_CHARS=2000
 
 read_config() {
   local key="$1" default="$2"
@@ -95,7 +95,8 @@ strip_markdown() {
     -e 's/^[[:space:]]*> //g'
 }
 
-TEXT=$(echo "$TEXT" | strip_markdown | tr '\n' ' ' | sed 's/  */ /g' | head -c "$MAX_CHARS")
+TEXT=$(echo "$TEXT" | strip_markdown | tr '\n' ' ' | sed 's/  */ /g')
+TEXT="${TEXT:0:$MAX_CHARS}"
 
 if [[ ${#TEXT} -lt 5 ]]; then
   exit 0
@@ -105,6 +106,8 @@ TMP=$(mktemp /tmp/opencode-speak-XXXXXX.txt)
 TTS_PID=""
 cleanup() {
   [[ -n "$TTS_PID" ]] && kill "$TTS_PID" 2>/dev/null; wait "$TTS_PID" 2>/dev/null
+  pkill -f "ffplay.*kokoro" 2>/dev/null
+  pkill -f "ffplay.*speak" 2>/dev/null
   rm -f "$TMP"
 }
 trap cleanup EXIT INT TERM
