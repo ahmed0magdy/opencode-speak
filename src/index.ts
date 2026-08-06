@@ -53,7 +53,6 @@ const VOICES: Record<Engine, string[]> = {
 const DEFAULT_MAX_CHARS = 1000
 const CHUNK_MAX_CHARS = 300
 const SYNTHESIS_COOLDOWN_MS = 500
-const CHUNK_TIMEOUT_MS = 60_000
 const CONFIG_DIR = join(homedir(), ".config", "opencode-speak")
 const CONFIG_CACHE_MS = 5000
 let lastConfigRead = 0
@@ -231,14 +230,7 @@ async function synthesize(
 
       state.activeProc = proc
 
-      const killTimer = setTimeout(() => {
-        try { process.kill(-proc.pid, "SIGTERM"); } catch {
-          try { proc.kill(); } catch {}
-        }
-      }, CHUNK_TIMEOUT_MS)
-
       const exitCode = await proc.exited
-      clearTimeout(killTimer)
       state.activeProc = null
       state.lastSynthesisEnd = Date.now()
 

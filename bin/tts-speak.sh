@@ -3,7 +3,6 @@ set -euo pipefail
 
 CONFIG_DIR="${HOME}/.config/opencode-speak"
 MAX_CHARS=1000
-CHUNK_TIMEOUT=60
 
 read_config() {
   local key="$1" default="$2"
@@ -118,13 +117,13 @@ export ONNX_PROVIDER="${ONNX_PROVIDER:-CUDAExecutionProvider}"
 
 if [[ "$ENGINE" == "kokoro" ]]; then
   if [[ -x "$KOKORO_BIN" ]]; then
-    timeout "$CHUNK_TIMEOUT" bash -c "cat \"$TMP\" | \"$KOKORO_BIN\" speak --voice \"$VOICE_KOKORO\" --speed \"$SPEED_KOKORO\" --lang \"$LANG_KOKORO\" --model \"$KOKORO_MODEL\" --play --service off" >/dev/null 2>&1 &
+    cat "$TMP" | "$KOKORO_BIN" speak --voice "$VOICE_KOKORO" --speed "$SPEED_KOKORO" --lang "$LANG_KOKORO" --model "$KOKORO_MODEL" --play --service off >/dev/null 2>&1 &
     TTS_PID=$!
     wait "$TTS_PID" 2>/dev/null
   fi
 else
   if [[ -x "$SPEAK_BIN" ]]; then
-    timeout "$CHUNK_TIMEOUT" bash -c "cat \"$TMP\" | \"$SPEAK_BIN\" -v \"$VOICE_SPEAK\" -s \"$SPEED_SPEAK\" -l \"$LANG_SPEAK\" --steps \"$SPEAK_STEPS\" --no-daemon" >/dev/null 2>&1 &
+    cat "$TMP" | "$SPEAK_BIN" -v "$VOICE_SPEAK" -s "$SPEED_SPEAK" -l "$LANG_SPEAK" --steps "$SPEAK_STEPS" --no-daemon >/dev/null 2>&1 &
     TTS_PID=$!
     wait "$TTS_PID" 2>/dev/null
   fi
