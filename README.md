@@ -91,33 +91,27 @@ Add the `/tts` command to `~/.config/opencode/opencode.jsonc`:
 
 </details>
 
-<details>
+<details open>
 <summary><b>Claude Code</b></summary>
 
-Clone the repo and point Claude Code at the plugin directory:
+Install from the marketplace — no cloning, no copying:
 
-```bash
-git clone https://github.com/ahmed0magdy/opencode-speak.git ~/.local/share/opencode-speak
+```
+/plugin marketplace add ahmed0magdy/opencode-speak
+/plugin install opencode-speak@opencode-speak
 ```
 
-Then add to your Claude Code config (`~/.claude/plugins/`):
+That's it. The `Stop` hook speaks the assistant's last message whenever TTS is
+enabled, and `/opencode-speak:tts` controls it from inside the session:
 
-```bash
-cp -r ~/.local/share/opencode-speak/claude ~/.claude/plugins/opencode-speak
+```
+/opencode-speak:tts on       # start speaking responses
+/opencode-speak:tts off      # stop, and cut off anything mid-sentence
+/opencode-speak:tts toggle   # flip between on and off
+/opencode-speak:tts voice af_bella
 ```
 
-Or use the `--plugin-dir` flag:
-
-```bash
-claude --plugin-dir ~/.local/share/opencode-speak/claude
-```
-
-The `Stop` hook automatically speaks the assistant's last message when TTS is enabled.
-
-**Enable TTS:**
-```bash
-~/.local/share/opencode-speak/bin/tts-config.sh set enabled true
-```
+If the install summary says `Run /reload-plugins to activate.`, run that.
 
 </details>
 
@@ -136,7 +130,7 @@ The `Stop` hook parses the transcript and speaks the last assistant message.
 
 **Enable TTS:**
 ```bash
-~/.local/share/opencode-speak/bin/tts-config.sh set enabled true
+tts-config.sh set enabled true
 ```
 
 </details>
@@ -145,10 +139,10 @@ The `Stop` hook parses the transcript and speaks the last assistant message.
 
 ```bash
 # Enable TTS (shared across all platforms)
-~/.local/share/opencode-speak/bin/tts-config.sh set enabled true
+tts-config.sh set enabled true
 
 # Test
-~/.local/share/opencode-speak/bin/tts-speak.sh --text "Hello, TTS is working!"
+tts-speak.sh --text "Hello, TTS is working!"
 ```
 
 ---
