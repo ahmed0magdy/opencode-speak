@@ -186,6 +186,16 @@ tts-config.sh set voice_speak emma
 tts-config.sh status
 ```
 
+Settings live in `~/.config/opencode-speak/` (one file per key) and persist
+across sessions and restarts — turning TTS on once keeps it on until you turn
+it off. Set `OPENCODE_SPEAK_CONFIG_DIR` to point every component at a different
+directory, which is how the self-test runs without touching your real settings:
+
+```bash
+bash bin/tts-selftest.sh          # full run with audio, ~40s
+bash bin/tts-selftest.sh --quiet  # config and plumbing checks only
+```
+
 ---
 
 ## Configuration (OpenCode only)

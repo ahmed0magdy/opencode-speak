@@ -19,8 +19,8 @@ Control text-to-speech voice output for Claude Code.
 ## Implementation
 
 When the user runs this command, execute the `tts-config.sh` script from the
-plugin's own directory. `${CLAUDE_PLUGIN_ROOT}` resolves to wherever Claude Code
-installed this plugin, so this works regardless of install location.
+plugin's own `bin/` directory using the absolute path below, which resolves to
+wherever Claude Code installed this plugin.
 
 ```bash
 CFGSH="${CLAUDE_PLUGIN_ROOT}/bin/tts-config.sh"

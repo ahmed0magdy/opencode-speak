@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONFIG_DIR="${HOME}/.config/opencode-speak"
+CONFIG_DIR="${OPENCODE_SPEAK_CONFIG_DIR:-${HOME}/.config/opencode-speak}"
 MAX_CHARS=2000
 
 read_config() {

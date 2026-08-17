@@ -9,9 +9,14 @@ set -uo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN="${REPO_DIR}/bin"
-CFG="${HOME}/.config/opencode-speak"
 QUIET=0
 [[ "${1:-}" == "--quiet" ]] && QUIET=1
+
+# Run against a throwaway config directory. The tests flip settings on and off,
+# so pointing them at the real config would leave the user's TTS in whatever
+# state the last assertion happened to set.
+CFG=$(mktemp -d)
+export OPENCODE_SPEAK_CONFIG_DIR="$CFG"
 
 PASS=0
 FAIL=0
@@ -19,16 +24,11 @@ ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; PASS=$((PASS+1)); }
 bad()  { printf '  \033[31m✗\033[0m %s\n' "$1"; FAIL=$((FAIL+1)); }
 head_() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 
-# Preserve the user's settings; restore them on exit however we leave.
-SAVED=$(mktemp -d)
-[[ -d "$CFG" ]] && cp -r "$CFG"/. "$SAVED"/ 2>/dev/null
-restore() {
-  [[ -d "$SAVED" ]] || return 0
-  mkdir -p "$CFG"
-  cp -r "$SAVED"/. "$CFG"/ 2>/dev/null
-  rm -rf "$SAVED"
-}
-trap restore EXIT INT TERM
+cleanup() { rm -rf "$CFG"; }
+trap cleanup EXIT INT TERM
+
+# Seed the sandbox with defaults so the tests start from a known state.
+bash "$BIN/tts-config.sh" init >/dev/null 2>&1
 
 head_ "1. Dependencies"
 for c in jq pactl; do

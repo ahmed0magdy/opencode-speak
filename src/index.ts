@@ -61,7 +61,10 @@ const VALID_SPEAK_LANGS = ["auto", "na", "ar", "de", "es", "fr", "hi", "it", "ja
 const VALID_MODELS = ["int8", "fp16", "full"]
 
 const DEFAULT_MAX_CHARS = 2000
-const CONFIG_DIR = join(homedir(), ".config", "opencode-speak")
+// OPENCODE_SPEAK_CONFIG_DIR lets tests point at a throwaway directory instead
+// of the user's real settings. All three readers honour it so they stay in sync.
+const CONFIG_DIR = process.env.OPENCODE_SPEAK_CONFIG_DIR
+  || join(homedir(), ".config", "opencode-speak")
 
 // Temp files currently in flight. synthesize()'s finally block handles the
 // normal path; this set exists so dispose() can clean up when the host quits
