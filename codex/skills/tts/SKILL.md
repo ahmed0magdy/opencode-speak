@@ -16,16 +16,15 @@ CFGSH=~/.local/share/opencode-speak/bin/tts-config.sh
 # Show full config panel
 bash "$CFGSH" status
 
-# Enable/disable
-bash "$CFGSH" set enabled true
-bash "$CFGSH" set enabled false
+# Enable/disable — `off` also stops speech already playing
+bash "$CFGSH" on
+bash "$CFGSH" off
+bash "$CFGSH" toggle       # flip between on and off
+bash "$CFGSH" stop         # stop current speech, stay enabled
 
 # Switch engine
 bash "$CFGSH" set engine kokoro
 bash "$CFGSH" set engine speak
-
-# Set roleplay voice (best warm female)
-bash "$CFGSH" roleplay
 
 # Change voice manually
 bash "$CFGSH" set voice_kokoro af_bella

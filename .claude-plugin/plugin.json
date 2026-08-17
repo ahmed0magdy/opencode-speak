@@ -1,0 +1,13 @@
+{
+  "name": "opencode-speak",
+  "displayName": "opencode-speak",
+  "version": "1.1.1",
+  "description": "TTS voice output for Claude Code responses using Kokoro or Supertonic 3",
+  "author": {
+    "name": "ahmed0magdy",
+    "url": "https://github.com/ahmed0magdy"
+  },
+  "homepage": "https://github.com/ahmed0magdy/opencode-speak",
+  "license": "MIT",
+  "keywords": ["tts", "text-to-speech", "voice", "kokoro", "supertonic", "accessibility"]
+}

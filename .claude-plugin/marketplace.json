@@ -1,0 +1,14 @@
+{
+  "name": "opencode-speak",
+  "owner": {
+    "name": "ahmed0magdy",
+    "url": "https://github.com/ahmed0magdy"
+  },
+  "plugins": [
+    {
+      "name": "opencode-speak",
+      "source": "./",
+      "description": "Hear Claude Code responses spoken aloud with local, offline TTS (Kokoro or Supertonic 3). No cloud, no API keys."
+    }
+  ]
+}

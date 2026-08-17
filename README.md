@@ -3,11 +3,11 @@
 [![npm version](https://img.shields.io/npm/v/opencode-speak)](https://www.npmjs.com/package/opencode-speak)
 [![license](https://img.shields.io/npm/l/opencode-speak)](LICENSE)
 
-Text-to-speech for AI coding assistants — hear responses spoken aloud using local TTS engines. Supports **OpenCode**, **Claude Code**, **Codex CLI**, and **Cursor**. No cloud, no API keys, no subscriptions.
+Text-to-speech for AI coding assistants — hear responses spoken aloud using local TTS engines. Supports **OpenCode**, **Claude Code**, and **Codex CLI**. No cloud, no API keys, no subscriptions.
 
 ## Features
 
-- **Multi-platform** — works with OpenCode, Claude Code, Codex CLI, and Cursor
+- **Multi-platform** — works with OpenCode, Claude Code, and Codex CLI
 - **Two local TTS engines** — [Kokoro](https://github.com/yoav0gal/kokoro-cli) (82M params, 54 voices) and [Supertonic 3](https://github.com/MohamedAliRashad/speak-cli) (99M params, 10 voices)
 - **100% offline** — no cloud APIs, no tokens, fully private
 - **On-demand** — TTS is off by default, toggle on/off any time
@@ -141,25 +141,6 @@ The `Stop` hook parses the transcript and speaks the last assistant message.
 
 </details>
 
-<details>
-<summary><b>Cursor</b></summary>
-
-Clone the repo and run the installer:
-
-```bash
-git clone https://github.com/ahmed0magdy/opencode-speak.git ~/.local/share/opencode-speak
-bash ~/.local/share/opencode-speak/cursor/install.sh
-```
-
-This merges a `stop` hook into `~/.cursor/hooks.json` that speaks the assistant's response.
-
-**Enable TTS:**
-```bash
-~/.local/share/opencode-speak/bin/tts-config.sh set enabled true
-```
-
-</details>
-
 ### Step 3: Enable and test
 
 ```bash
@@ -179,7 +160,9 @@ This merges a `stop` hook into `~/.cursor/hooks.json` that speaks the assistant'
 | Command | Description |
 |---------|-------------|
 | `/tts on` | Start speaking LLM responses |
-| `/tts off` | Stop speaking |
+| `/tts off` | Stop speaking, and cut off any speech in progress |
+| `/tts toggle` | Flip between on and off |
+| `/tts stop` | Stop current speech but stay enabled |
 | `/tts kokoro` | Switch to Kokoro engine |
 | `/tts speak` | Switch to Supertonic 3 engine |
 | `/tts voice af_bella` | Change voice |
@@ -191,9 +174,11 @@ This merges a `stop` hook into `~/.cursor/hooks.json` that speaks the assistant'
 ### All platforms (config script)
 
 ```bash
-# Enable/disable
-tts-config.sh set enabled true
-tts-config.sh set enabled false
+# Enable/disable — `off` also stops speech already playing
+tts-config.sh on
+tts-config.sh off
+tts-config.sh toggle
+tts-config.sh stop        # stop current speech, stay enabled
 
 # Switch engine
 tts-config.sh set engine kokoro
@@ -261,13 +246,13 @@ English (American): `af_*`, `am_*` | English (British): `bf_*`, `bm_*` | Spanish
 ### Architecture
 
 ```
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│   OpenCode   │    │  Claude Code │    │  Codex CLI   │    │    Cursor    │
-│  (TypeScript │    │  (Stop hook  │    │  (Stop hook  │    │  (stop hook  │
-│   plugin)    │    │   + stdin)   │    │ + transcript)│    │ + transcript)│
-└──────┬───────┘    └──────┬───────┘    └──────┬───────┘    └──────┬───────┘
-       │                   │                   │                   │
-       └───────────────────┴───────────────────┴───────────────────┘
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│   OpenCode   │    │  Claude Code │    │  Codex CLI   │
+│  (TypeScript │    │  (Stop hook  │    │  (Stop hook  │
+│   plugin)    │    │   + stdin)   │    │ + transcript)│
+└──────┬───────┘    └──────┬───────┘    └──────┬───────┘
+       │                   │                   │
+       └───────────────────┴───────────────────┘
                                     │
                         ┌───────────▼───────────┐
                         │   bin/tts-speak.sh    │
@@ -305,7 +290,6 @@ No background processes run while TTS is off. Models load on-demand and release 
 | **API keys needed** | No | Depends | Depends | Optional | No |
 | **OpenCode** | Yes | Yes | No | No | Soon |
 | **Claude Code** | Yes | Yes | Yes | Yes | Yes |
-| **Cursor** | Yes | Yes | No | Yes (MCP) | Yes |
 | **Codex CLI** | Yes | Yes | No | No | Yes |
 | **Local engines** | Kokoro, Supertonic 3 | Voicebox, Kokoro | System TTS | Kokoro, espeak-ng | Supertonic ONNX |
 | **Cloud engines** | None | ElevenLabs, OpenAI, Gemini | ElevenLabs, Polly | ElevenLabs, edge-tts | None |
@@ -352,10 +336,6 @@ rm -rf ~/.claude/plugins/opencode-speak
 rm -rf ~/.codex/plugins/opencode-speak
 ```
 
-### Cursor
-
-Remove the `opencode-speak` hook entry from `~/.cursor/hooks.json`.
-
 ### Shared (all platforms)
 
 ```bash
@@ -376,7 +356,7 @@ rm -rf ~/.cache/supertonic3         # Supertonic 3 models
 
 ## Dependencies
 
-- `jq` — JSON parsing for bash hooks (Claude Code, Codex, Cursor): `sudo apt install jq`
+- `jq` — JSON parsing for bash hooks (Claude Code, Codex): `sudo apt install jq`
 - `kokoro-cli` and/or `speak-cli` — TTS engines (see Install above)
 - `espeak-ng` — required for Kokoro on Linux: `sudo apt install espeak-ng`
 

@@ -62,6 +62,18 @@ const VALID_MODELS = ["int8", "fp16", "full"]
 
 const DEFAULT_MAX_CHARS = 2000
 const CONFIG_DIR = join(homedir(), ".config", "opencode-speak")
+
+// Temp files currently in flight. synthesize()'s finally block handles the
+// normal path; this set exists so dispose() can clean up when the host quits
+// mid-synthesis, which would otherwise leave ~500KB wav files in /tmp forever.
+const liveTempFiles = new Set<string>()
+
+function cleanupTempFiles(): void {
+  for (const f of liveTempFiles) {
+    try { unlinkSync(f) } catch {}
+  }
+  liveTempFiles.clear()
+}
 const CONFIG_CACHE_MS = 5000
 const AUDIO_CHECK_CACHE_MS = 30000
 let lastConfigRead = 0
@@ -143,10 +155,12 @@ function stripMarkdown(text: string): string {
 
 function sanitizeForSpeech(text: string): string {
   return text
+    // URLs first: the "dot" rules below rewrite example.com and would
+    // otherwise destroy the :// this pattern needs to match.
+    .replace(/https?:\/\/\S+/g, "")
     .replace(/--(\w[\w-]*)/g, "$1")
     .replace(/(\w+)\.([a-z]{1,4}):(\d+)/g, "$1 dot $2, line $3")
     .replace(/(\w+)\.([a-z]{1,4})/g, "$1 dot $2")
-    .replace(/https?:\/\/\S+/g, "")
     .replace(/[<>{}[\]|\\\/^~`]+/g, " ")
     .replace(/"{2,}/g, " ")
     .replace(/'{2,}/g, " ")
@@ -206,6 +220,9 @@ async function synthesize(
   const tmpText = join(tmpdir(), `opencode-speak-${suffix}.txt`)
   const tmpWav = join(tmpdir(), `opencode-speak-${suffix}.wav`)
 
+  liveTempFiles.add(tmpText)
+  liveTempFiles.add(tmpWav)
+
   try {
     writeFileSync(tmpText, text, "utf-8")
 
@@ -245,7 +262,7 @@ async function synthesize(
     })
 
     state.playerProc = playProc
-    const playExit = await playProc.exited
+    await playProc.exited
     state.playerProc = null
     state.lastSynthesisEnd = Date.now()
   } finally {
@@ -253,6 +270,8 @@ async function synthesize(
     state.playerProc = null
     try { unlinkSync(tmpText) } catch {}
     try { unlinkSync(tmpWav) } catch {}
+    liveTempFiles.delete(tmpText)
+    liveTempFiles.delete(tmpWav)
   }
 }
 
@@ -383,7 +402,38 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
       state.pendingText = null
       await syncStateToConfig(state)
       killTTS(state)
+      cleanupTempFiles()
       await toast("TTS: OFF", "info")
+      return
+    }
+
+    if (args === "toggle") {
+      if (state.enabled) {
+        state.enabled = false
+        state.speaking = false
+        state.pendingText = null
+        await syncStateToConfig(state)
+        killTTS(state)
+        cleanupTempFiles()
+        await toast("TTS: OFF", "info")
+      } else {
+        if (!binaries[state.engine]) {
+          await toast(`Engine "${state.engine}" not installed`, "error")
+          return
+        }
+        state.enabled = true
+        await syncStateToConfig(state)
+        await toast(formatStatus(state), "success")
+      }
+      return
+    }
+
+    if (args === "stop") {
+      state.speaking = false
+      state.pendingText = null
+      killTTS(state)
+      cleanupTempFiles()
+      await toast(`Speech stopped (TTS still ${state.enabled ? "ON" : "OFF"})`, "info")
       return
     }
 
@@ -500,7 +550,9 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
         [
           "/tts             — show config panel",
           "/tts on          — start speaking responses",
-          "/tts off         — stop (kills active speech)",
+          "/tts off         — stop speaking (kills active speech)",
+          "/tts toggle      — flip between on and off",
+          "/tts stop        — stop current speech, stay enabled",
           "/tts kokoro      — use Kokoro engine",
           "/tts speak       — use Supertonic 3 engine",
           "/tts voice X     — change voice",
@@ -582,10 +634,12 @@ export const OpenCodeSpeak: Plugin = async ({ client }, options?: PluginOptions)
     },
 
     dispose: async () => {
-      state.enabled = false
+      // Deliberately does not persist enabled=false: the config is shared with
+      // Claude Code and Codex, so quitting opencode must not mute them.
       state.speaking = false
       state.pendingText = null
       killTTS(state)
+      cleanupTempFiles()
     },
   }
 }

@@ -2,7 +2,7 @@
   "hooks": {
     "Stop": [
       {
-        "command": "bash \"${PLUGIN_ROOT}/bin/tts-speak.sh\" --transcript \"${transcript_path}\"",
+        "command": "bash \"${PLUGIN_ROOT}/hooks/tts-stop.sh\" \"${transcript_path}\"",
         "description": "Speak assistant response via TTS"
       }
     ]

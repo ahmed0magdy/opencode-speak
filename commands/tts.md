@@ -6,10 +6,11 @@ Control text-to-speech voice output for Claude Code.
 
 - `/opencode-speak:tts` — Show full config panel (status, engine, voice, available voices)
 - `/opencode-speak:tts on` — Enable TTS
-- `/opencode-speak:tts off` — Disable TTS
+- `/opencode-speak:tts off` — Disable TTS and stop any speech in progress
+- `/opencode-speak:tts toggle` — Flip between on and off
+- `/opencode-speak:tts stop` — Stop speech in progress, leave TTS enabled
 - `/opencode-speak:tts kokoro` — Switch to Kokoro engine
 - `/opencode-speak:tts speak` — Switch to Supertonic 3 engine
-- `/opencode-speak:tts roleplay` — Set best warm female voice for roleplay
 - `/opencode-speak:tts voice NAME` — Change voice (e.g., af_bella, emma)
 - `/opencode-speak:tts voices` — List all available voices
 - `/opencode-speak:tts status` — Show full config
@@ -17,31 +18,32 @@ Control text-to-speech voice output for Claude Code.
 
 ## Implementation
 
-When the user runs this command, execute the `tts-config.sh` script. The script lives at the path where opencode-speak was cloned (typically `~/.local/share/opencode-speak/bin/tts-config.sh`).
+When the user runs this command, execute the `tts-config.sh` script from the
+plugin's own directory. `${CLAUDE_PLUGIN_ROOT}` resolves to wherever Claude Code
+installed this plugin, so this works regardless of install location.
 
 ```bash
-CFGSH="~/.local/share/opencode-speak/bin/tts-config.sh"
+CFGSH="${CLAUDE_PLUGIN_ROOT}/bin/tts-config.sh"
 
 # Show config panel (no args or "status")
 bash "$CFGSH" status
 
-# Enable/disable
-bash "$CFGSH" set enabled true
-bash "$CFGSH" set enabled false
+# Enable/disable — `off` also stops speech already playing
+bash "$CFGSH" on
+bash "$CFGSH" off
+bash "$CFGSH" toggle
+bash "$CFGSH" stop
 
 # Switch engine
 bash "$CFGSH" set engine kokoro
 bash "$CFGSH" set engine speak
-
-# Set roleplay voice
-bash "$CFGSH" roleplay
 
 # Change voice
 bash "$CFGSH" set voice_kokoro af_bella
 bash "$CFGSH" set voice_speak emma
 
 # Test (speak a phrase)
-echo "Hello, this is a test" | ~/.local/share/opencode-speak/bin/tts-speak.sh --text "Hello, this is a test"
+bash "${CLAUDE_PLUGIN_ROOT}/bin/tts-speak.sh" --text "Hello, this is a test"
 ```
 
 ## Roleplay Voices (warm, expressive, female)
